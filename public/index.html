@@ -28,6 +28,7 @@
     <button class="tab-btn active" data-tab="creation" role="tab" aria-selected="true">🎨 Creation</button>
     <button class="tab-btn" data-tab="reverse" role="tab" aria-selected="false">🔍 Reverse Engineer</button>
     <button class="tab-btn" data-tab="mockups" role="tab" aria-selected="false">🖼 Mockups</button>
+    <button class="tab-btn" data-tab="thumbnails" role="tab" aria-selected="false">🎬 Thumbnails</button>
   </nav>
 
   <!-- ═══════════════════════════════════════
@@ -394,6 +395,139 @@
   </div>
 
   <!-- ═══════════════════════════════════════
+       TAB: Thumbnails
+  ═══════════════════════════════════════ -->
+  <div id="tab-thumbnails" class="tab-panel">
+    <main class="tn-main">
+
+      <div class="tn-intro">
+        <h2 class="tn-title">🎬 AI Thumbnail Creator</h2>
+        <p class="tn-subtitle">Answer 7 questions. AI applies the full psychology framework and builds 3 layout
+          variations ready for Nano Banana.</p>
+      </div>
+
+      <!-- ── SECTION: Intake Wizard ── -->
+      <section id="tn-section-intake" class="tn-wizard">
+        <div class="tn-progress-bar-track">
+          <div class="tn-progress-bar-fill" id="tn-progress"></div>
+        </div>
+        <p id="tn-step-count" class="tn-step-count">Question 1 of 7</p>
+        <div id="tn-question-container"></div>
+        <div class="tn-intake-nav">
+          <button id="btn-tn-back" class="btn-secondary hidden">← Back</button>
+          <button id="btn-tn-next" class="btn-primary">Continue →</button>
+        </div>
+      </section>
+
+      <!-- ── SECTION: Ready to Analyse ── -->
+      <section id="tn-section-analyse" class="tn-wizard hidden">
+        <div class="tn-analyse-header">
+          <h3 class="tn-section-heading">Ready to Analyse</h3>
+          <p class="tn-section-subtext">AI will classify your loop type, select the curiosity gap, triggers, expression,
+            and assemble 3 prompts.</p>
+        </div>
+        <div id="tn-answers-summary" class="tn-answers-summary"></div>
+        <div id="tn-analyse-status" class="status-message hidden"></div>
+        <div class="tn-analyse-actions">
+          <button id="btn-tn-analyse" class="btn-primary">✦ Analyse</button>
+          <button id="btn-tn-reset-analyse" class="btn-secondary">↺ Start Over</button>
+        </div>
+      </section>
+
+      <!-- ── SECTION: Results + Overrides ── -->
+      <section id="tn-section-results" class="hidden">
+
+        <!-- Loop Detector -->
+        <div class="tn-results-block">
+          <div class="tn-results-block-header">
+            <h3 class="tn-section-heading">Loop Detector</h3>
+            <p class="tn-section-subtext">AI's classification — override by editing prompts directly</p>
+          </div>
+          <div id="tn-loop-badge"></div>
+          <div id="tn-quality-checks"></div>
+        </div>
+
+        <!-- Override: Curiosity Gap -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Curiosity Gap <span class="tn-override-label">override</span></h3>
+          <div id="tn-gap-picker" class="tn-selector-row"></div>
+        </div>
+
+        <!-- Override: Style -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Visual Style</h3>
+          <div id="tn-style-picker" class="tn-selector-row"></div>
+        </div>
+
+        <!-- Override: Expression -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Expression <span class="tn-override-label">override</span></h3>
+          <div id="tn-expression-picker" class="tn-expr-grid"></div>
+        </div>
+
+        <!-- Override: Colour -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Colour Preset <span class="tn-override-label">override</span></h3>
+          <div id="tn-result-color-picker" class="tn-color-row"></div>
+        </div>
+
+        <!-- Prompt Previews -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Assembled Prompts <span class="tn-override-label">editable</span></h3>
+          <div class="tn-prompt-tabs">
+            <button class="tn-prompt-tab active" data-layout="offset">Offset</button>
+            <button class="tn-prompt-tab" data-layout="centered">Centered</button>
+            <button class="tn-prompt-tab" data-layout="split">Split Screen</button>
+          </div>
+          <div class="tn-prompt-editor">
+            <textarea id="tn-prompt-offset" class="tn-prompt-textarea" rows="7" placeholder="Offset prompt…"></textarea>
+            <textarea id="tn-prompt-centered" class="tn-prompt-textarea hidden" rows="7"
+              placeholder="Centered prompt…"></textarea>
+            <textarea id="tn-prompt-split" class="tn-prompt-textarea hidden" rows="7"
+              placeholder="Split screen prompt…"></textarea>
+            <div class="tn-prompt-actions">
+              <button class="btn-secondary" data-export-layout="offset" style="font-size:12px;padding:6px 12px;">⬇
+                Export Offset .md</button>
+              <button class="btn-secondary" data-export-layout="centered" style="font-size:12px;padding:6px 12px;">⬇
+                Export Centered .md</button>
+              <button class="btn-secondary" data-export-layout="split" style="font-size:12px;padding:6px 12px;">⬇ Export
+                Split .md</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generate -->
+        <div id="tn-gen-section" class="tn-results-block hidden">
+          <button id="btn-tn-generate" class="btn-primary tn-generate-btn">⚡ Generate 3 Variations</button>
+          <p class="tn-rate-note">Each click uses 3 of your 30/hr generation quota</p>
+        </div>
+
+        <!-- Generation Grid -->
+        <div id="tn-gen-grid" class="tn-gen-grid hidden">
+          <div class="tn-slot" id="tn-slot-offset"></div>
+          <div class="tn-slot" id="tn-slot-centered"></div>
+          <div class="tn-slot" id="tn-slot-split"></div>
+        </div>
+
+        <!-- Template Memory -->
+        <div class="tn-results-block tn-templates-block">
+          <h3 class="tn-selector-heading">Template Memory</h3>
+          <p class="tn-section-subtext">Save this setup as a named template to quickly remix later</p>
+          <button id="btn-tn-save-template" class="btn-secondary">💾 Save as Template</button>
+          <div id="tn-template-list" class="tn-template-list"></div>
+        </div>
+
+        <!-- Reset -->
+        <div class="tn-results-block" style="text-align:center;">
+          <button id="btn-tn-reset-results" class="btn-secondary">↺ Start Over</button>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
        Global Fullscreen Image Modal
   ═══════════════════════════════════════ -->
   <div id="image-modal" class="image-modal hidden" role="dialog" aria-modal="true">
@@ -409,6 +543,7 @@
 
   <script src="circuit.js"></script>
   <script src="app.js"></script>
+  <script src="thumbnail-tab.js"></script>
 </body>
 
 </html>

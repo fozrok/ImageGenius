@@ -351,7 +351,19 @@ CTA/Button: Mint #7FE7C4 (hover: #66D6B0)
 Background: Soft Blush #FFF7F8
 Neutrals: Cocoa #3A2A2E, Mist #D8D1D4`
     },
+    {
+        name: 'AI Summit',
+        swatches: ['#050505', '#9D50BB', '#6391FF'],
+        text:
+            `Background: Deep Onyx #050505
+Brand Colour 1: Amethyst Purple #9D50BB
+Brand Colour 2: Electric Lavender #A259FF
+Brand Colour 3: Cornflower Blue #6391FF
+CTA/Button: Vivid Magenta Gradient #9D50BB to #D8327B
+Highlight: Periwinkle Violet Gradient #6391FF to #A259FF`
+    },
 ];
+
 
 function applyBrandColors(prompt) {
     const el = document.getElementById('brand-colors-input');
@@ -1804,6 +1816,8 @@ function init() {
     setupMockups();
     setupImageModal();
     updateButtonStates();
+    // Thumbnails tab (thumbnail-tab.js loaded after app.js)
+    if (typeof initThumbnailsTab === 'function') initThumbnailsTab();
 }
 
 init();

@@ -469,6 +469,162 @@ The same structural prompt but with ALL content-specific details replaced with f
   }
 });
 
+// POST /thumbnail-prompt - AI thumbnail prompt assembly (Part 9 logic)
+app.post('/thumbnail-prompt', refineLimiter, async (req, res) => {
+  const {
+    videoTitle, topic, niche, desiredEmotion, subjectPreference,
+    brandColors, headlineText, subtextText,
+    loopOverride, curiosityGapOverride, styleTag, expressionOverride,
+    colorPreset, customAccentHex, layoutOverride
+  } = req.body;
+
+  if (!videoTitle || !topic) {
+    return res.status(400).json({ error: 'videoTitle and topic are required' });
+  }
+
+  const colorSection = customAccentHex
+    ? `Custom accent colour: ${customAccentHex}`
+    : colorPreset
+      ? `Colour preset: ${colorPreset}`
+      : brandColors
+        ? `Brand colours: ${brandColors}`
+        : 'No specific colours provided — choose a suitable preset from the 7 presets.';
+
+  const overrides = [
+    loopOverride ? `Loop type OVERRIDE (user selected): ${loopOverride}` : '',
+    curiosityGapOverride ? `Curiosity gap OVERRIDE (user selected): ${curiosityGapOverride}` : '',
+    styleTag ? `Style tag: ${styleTag}` : '',
+    expressionOverride ? `Expression OVERRIDE (user selected): ${expressionOverride}` : '',
+    layoutOverride ? `Layout OVERRIDE (user selected): ${layoutOverride}` : '',
+  ].filter(Boolean).join('\n');
+
+  const systemPrompt = `You are an expert YouTube thumbnail prompt engineer for Nano Banana Pro image generation.
+
+PSYCHOLOGY FRAMEWORK:
+
+Loop Types — classify from video title:
+- desire: educational/how-to, pain+solution → show end state or transformation
+- interest: entertainment/story/reaction → show tension, curiosity, unresolved moment
+- aspiration: motivational/mindset/coaching → show the aspirational after state
+- fear: warnings/mistakes/risk → show the painful before state
+
+Curiosity Gaps:
+- before_after: Split screen — relatable before, aspirational after
+- challenge: Subject facing or overcoming high-stakes situation
+- contradiction: Visually mismatched elements that feel "wrong"
+- novelty: One bizarre/unexpected element that makes viewer stop
+- result: End state clearly shown, journey hidden
+
+Attention Triggers (choose MAX 3):
+1. Color Contrast, 2. Strong Face + Expression, 3. Famous/Recognisable Person (only if in video), 4. Big Number/Dollar Figure, 5. Familiar Icon/Visual Shortcut, 6. Cinematic/Aesthetic Imagery, 7. Movement/Drama/Danger
+
+Expression Library — map from desiredEmotion:
+- Curious → "curious and engaged — warm and approachable, suggesting the topic is more accessible than expected"
+- Shocked → "wide-eyed and genuinely surprised — not theatrical, but authentically caught off-guard"
+- Inspired → "quietly confident and inspired — radiating the feeling of someone who has already made the transformation"
+- Concerned → "slightly concerned but composed — the face of someone who knows something the viewer doesn't"
+- Excited → "radiating quiet, earned confidence — the expression of someone who has come out the other side"
+- Confident → "calm, assured, and professional — projecting quiet competence rather than loud confidence"
+
+Layouts:
+- offset: Subject on left/right third — most versatile, use for desire/aspiration loops
+- centered: Subject in center — use for big reveals, challenges, authority
+- split_screen: Two halves — use ONLY for before/after or comparison topics
+
+3-Element Rule: NEVER more than 3 visual elements. Always: 1) Subject, 2) Context visual, 3) Text/graphic accent.
+
+Color Psychology: green=good/positive, red=bad/warning, warm tones=aspiration, cool=tech/authority. Dark backgrounds with bright accents perform best on both dark and light mode.
+Contrast Warning: If the chosen colour is light (white, cream, light yellow) on a light/white background, flag it.
+
+2-Second Test: Key message must be comprehensible within 2 seconds. If complex or crowded, it fails.
+
+Quality Modifiers — APPEND TO EVERY PROMPT:
+"Soft, diffused cinematic lighting. [LAYOUT] composition using the Rule of Thirds. No key visual elements in the bottom-right corner (reserved for YouTube timestamp overlay). All text and graphic elements large enough to read clearly on a mobile phone screen at thumbnail size. Maximum 3 visual elements in the frame. High detail, photorealistic quality. The overall aesthetic is eye-catching, modern, and designed to maximise click-through rate. 16:9 aspect ratio, 1920x1080 resolution."
+
+TASK: Using all inputs below, follow the 9-step assembly logic, then output ONLY a raw valid JSON object — no markdown, no prose, no code fences.
+
+Required JSON shape:
+{
+  "loopType": "desire|interest|aspiration|fear",
+  "curiosityGap": "before_after|challenge|contradiction|novelty|result",
+  "attentionTriggers": ["trigger1", "trigger2"],
+  "expressionUsed": "expression string from library above",
+  "layoutUsed": "offset|centered|split_screen",
+  "contrastWarning": null,
+  "twoSecondTestPass": true,
+  "twoSecondTestNote": "brief note only if false, else empty string",
+  "prompts": {
+    "offset": "FULL ready-to-generate prompt — offset composition — all variables resolved — quality modifiers appended",
+    "centered": "FULL ready-to-generate prompt — centered composition — all variables resolved — quality modifiers appended",
+    "splitScreen": "FULL ready-to-generate prompt — split screen composition or creative variation if not applicable — all variables resolved — quality modifiers appended"
+  }
+}
+
+All three prompts must be fully written, detailed, and immediately usable with Nano Banana. Each must differ in layout and composition but share the same topic, style, and colour.`;
+
+  const userMessage = `Video Title: ${videoTitle}
+Topic/Niche: ${topic}${niche ? ` / ${niche}` : ''}
+Target viewer emotion: ${desiredEmotion || 'Curious'}
+Subject preference: ${subjectPreference || 'No preference'}
+Headline text: ${headlineText || '(AI to suggest)'}
+Subtext: ${subtextText || '(AI to suggest)'}
+Colours: ${colorSection}
+${overrides ? `\nUser overrides:\n${overrides}` : ''}`;
+
+  try {
+    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: `OpenRouter error: ${errorText}` });
+    }
+
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content?.trim();
+
+    if (!raw) return res.status(500).json({ error: 'No response from AI' });
+
+    // Robustly extract JSON even if model wraps in fences
+    let cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) cleaned = jsonMatch[0];
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      try {
+        parsed = JSON.parse(cleaned.replace(/(?<!\\)\n/g, '\\n'));
+      } catch {
+        return res.status(500).json({ error: 'AI returned invalid JSON', raw });
+      }
+    }
+
+    if (!parsed.prompts?.offset) {
+      return res.status(500).json({ error: 'AI response missing required prompt fields', parsed });
+    }
+
+    res.json(parsed);
+  } catch (err) {
+    console.error('Error in /thumbnail-prompt:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
 // GET /download - Stream image from CDN
 app.get('/download', async (req, res) => {
   const { url, filename } = req.query;
