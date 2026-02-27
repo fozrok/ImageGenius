@@ -111,6 +111,35 @@
         </div>
       </section>
 
+      <!-- Section 3c: Reference Image (optional) -->
+      <section id="section-reference">
+        <div class="brand-header">
+          <button id="btn-ref-toggle" class="brand-toggle-btn" aria-expanded="false">
+            <span class="brand-toggle-icon">🖼</span>
+            <span class="brand-toggle-label">Reference Image</span>
+            <span class="brand-toggle-optional">(optional)</span>
+            <span class="brand-toggle-chevron">▾</span>
+          </button>
+          <button id="btn-ref-clear" class="btn-brand-clear hidden" title="Remove reference image">✕ Remove</button>
+        </div>
+        <div id="ref-panel" class="brand-panel hidden">
+          <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Upload an image to guide the visual style,
+            colour palette, or layout of your infographic.</p>
+          <div id="creation-drop-zone" class="drop-zone mockup-drop-zone">
+            <input type="file" id="creation-file-input" accept="image/png,image/jpeg,image/webp" />
+            <div class="drop-zone-inner">
+              <div class="drop-zone-icon">📎</div>
+              <p class="drop-zone-text">Drop an image or <span class="drop-zone-link">browse</span></p>
+              <p class="drop-zone-hint">PNG · JPG · WEBP · Max 10 MB</p>
+            </div>
+          </div>
+          <div id="creation-preview" class="re-preview hidden">
+            <img id="creation-preview-img" alt="Reference image preview" />
+            <button id="creation-change-img" class="btn-secondary">↩ Remove Image</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Section 4: Refine Prompt -->
       <section id="section-refine">
         <div class="refine-actions">

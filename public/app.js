@@ -795,10 +795,14 @@ btnRefine.addEventListener('click', async () => {
     refineStatus.classList.remove('hidden', 'error');
 
     try {
+        const body = { topic, style: selectedStyles[0].description, density: selectedDensity };
+        if (creationImageBase64) { body.referenceImageBase64 = creationImageBase64; body.mimeType = creationImageMime; }
+        const brandColors = document.getElementById('brand-colors-input')?.value.trim();
+        if (brandColors) body.brandColors = brandColors;
         const res = await fetch('/refine-prompt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic, style: selectedStyles[0].description })
+            body: JSON.stringify(body)
         });
 
         const data = await res.json();
@@ -912,7 +916,13 @@ btnQuickGen.addEventListener('click', async () => {
                 fetch('/refine-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ topic, style: style.description })
+                    body: JSON.stringify((() => {
+                        const b = { topic, style: style.description, density: selectedDensity };
+                        if (creationImageBase64) { b.referenceImageBase64 = creationImageBase64; b.mimeType = creationImageMime; }
+                        const bc = document.getElementById('brand-colors-input')?.value.trim();
+                        if (bc) b.brandColors = bc;
+                        return b;
+                    })()),
                 }).then(async res => {
                     const data = await res.json();
                     if (!res.ok || data.error) throw new Error(data.error || 'Failed');
@@ -925,7 +935,7 @@ btnQuickGen.addEventListener('click', async () => {
         let failed = 0;
         results.forEach(r => {
             if (r.status === 'fulfilled') {
-                submitTask(applyBrandColors(applyDensity(r.value.prompt)), r.value.style);
+                submitTask(applyBrandColors(r.value.prompt), r.value.style);
                 queued++;
             } else {
                 failed++;
@@ -1035,6 +1045,75 @@ function setupBrandColors() {
         // Deselect preset chips if user edits manually
         markActive(null);
         syncIndicators();
+    });
+}
+
+/* ─────────────────────────────────────────────
+   Reference Image Upload (Creation Tab)
+───────────────────────────────────────────── */
+let creationImageBase64 = null;
+let creationImageMime = null;
+
+function setupCreationReferenceImage() {
+    const toggleBtn = document.getElementById('btn-ref-toggle');
+    const clearBtn = document.getElementById('btn-ref-clear');
+    const panel = document.getElementById('ref-panel');
+    const dropZone = document.getElementById('creation-drop-zone');
+    const fileInput = document.getElementById('creation-file-input');
+    const preview = document.getElementById('creation-preview');
+    const previewImg = document.getElementById('creation-preview-img');
+    const removeBtn = document.getElementById('creation-change-img');
+    if (!toggleBtn || !panel) return;
+
+    toggleBtn.addEventListener('click', () => {
+        const isHidden = panel.classList.toggle('hidden');
+        toggleBtn.setAttribute('aria-expanded', String(!isHidden));
+        toggleBtn.querySelector('.brand-toggle-chevron').textContent = isHidden ? '▾' : '▴';
+    });
+
+    function loadFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10 MB.'); return; }
+        const reader = new FileReader();
+        reader.onload = e => {
+            const dataUrl = e.target.result;
+            creationImageBase64 = dataUrl.split(',')[1];
+            creationImageMime = file.type;
+            previewImg.src = dataUrl;
+            dropZone.classList.add('hidden');
+            preview.classList.remove('hidden');
+            clearBtn.classList.remove('hidden');
+            toggleBtn.classList.add('has-content');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+        creationImageBase64 = null;
+        creationImageMime = null;
+        fileInput.value = '';
+        previewImg.src = '';
+        preview.classList.add('hidden');
+        dropZone.classList.remove('hidden');
+        clearBtn.classList.add('hidden');
+        toggleBtn.classList.remove('has-content');
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        loadFile(e.dataTransfer.files[0]);
+    });
+    removeBtn.addEventListener('click', clearImage);
+    clearBtn.addEventListener('click', () => {
+        clearImage();
+        panel.classList.add('hidden');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.querySelector('.brand-toggle-chevron').textContent = '▾';
     });
 }
 
@@ -1611,6 +1690,7 @@ function init() {
     setupAutoExpand(topicInput);
     setupAutoExpand(refinedPrompt);
     setupBrandColors();
+    setupCreationReferenceImage();
     setupReverseEngineer();
     setupMockups();
     setupImageModal();

@@ -23,39 +23,89 @@ app.get('/', (req, res) => {
 
 // POST /refine-prompt - OpenRouter API call
 app.post('/refine-prompt', async (req, res) => {
-  const { topic, style } = req.body;
+  const { topic, style, density, referenceImageBase64, mimeType, brandColors } = req.body;
 
   if (!topic || !style) {
     return res.status(400).json({ error: 'Missing topic or style' });
   }
+
+  const densityInstructions = {
+    Minimal: `
+## DENSITY: MINIMAL
+The user wants a clean, ultra-sparse infographic. Your Phase 1 analysis must extract ONLY the single most important insight. Your Phase 2 prompt must describe a composition with:
+- Maximum 3 labelled visual elements total
+- Generous negative space — at least 40% of the canvas is empty
+- One dominant focal point (the hero stat/concept) and at most two supporting elements
+- No sub-bullets, no annotation layers, no complex layouts
+- Simple geometric shapes or a single bold icon — nothing decorative or ornate
+- Clean, readable typography with no more than 2 font treatments`,
+    Concise: `
+## DENSITY: CONCISE
+The user wants a balanced infographic. Your Phase 1 analysis should extract 1 hero insight and 3–5 supporting points. Your Phase 2 prompt must describe:
+- 4–7 clearly labelled elements with visible hierarchy
+- Comfortable whitespace between sections
+- One primary layout metaphor (funnel, timeline, comparison, etc.)
+- Clear typography hierarchy across 2–3 levels`,
+    Detailed: `
+## DENSITY: DETAILED
+The user wants an information-rich infographic. Your Phase 1 analysis should extract all sub-topics, statistics, and nuances. Your Phase 2 prompt must describe:
+- 8+ data points, multiple callout boxes, rich annotations
+- Layered visual hierarchy with primary, secondary, and tertiary elements
+- Multiple sections or panels with clearly differentiated content zones
+- Dense but organised typography with 3+ levels of hierarchy`
+  };
+
+  const densitySection = densityInstructions[density] || densityInstructions['Concise'];
+
+  const brandSection = brandColors
+    ? `\n\nBRAND COLOURS — the prompt must instruct the image generator to use ONLY these colours throughout:\n${brandColors}`
+    : '';
+
+  const referenceNote = referenceImageBase64
+    ? '\n\nA reference image has been provided. Study it carefully to extract: visual style, colour palette, layout structure, typography treatment, and overall aesthetic. Incorporate these specific visual characteristics into your prompt — the output should feel visually coherent with the reference image.'
+    : '';
 
   const systemPrompt = `You are a world-class instructional designer and AI image prompt engineer specialising in infographic creation for the Nano Banana Pro image generation model.
 
 Your task is a two-phase process:
 
 ## PHASE 1 — Instructional Analysis
-Deeply analyse the user's raw input (their topic, data, or information) as an expert instructional designer would. Extract and structure the content into a clear infographic hierarchy:
-- A compelling, specific TITLE for the infographic
-- 1 HERO STAT or central insight (the most striking, memorable takeaway)
-- 2–4 SUPPORTING CONCEPTS or data points that reinforce the hero stat
-- 2–3 ACTIONABLE STEPS or conclusions the viewer should take away
-- Identify the best VISUAL METAPHOR or layout structure for the content (e.g. timeline, funnel, comparison, cycle, step-by-step process, radial diagram, before/after)
+Deeply analyse the user's raw input as an expert instructional designer. Extract and structure the content:
+- A compelling, specific TITLE
+- 1 HERO STAT or central insight (the most striking takeaway)
+- Supporting concepts that reinforce the hero (quantity governed by density below)
+- Actionable steps or conclusions (quantity governed by density below)
+- The best VISUAL METAPHOR or layout structure (timeline, funnel, comparison, cycle, radial, before/after, etc.)
+
+${densitySection}
 
 ## PHASE 2 — Image Prompt Construction
-Using your structured content from Phase 1, construct a single, detailed, highly descriptive image generation prompt for Nano Banana Pro that:
-1. Opens with the infographic title and the identified layout structure
-2. Describes each visual section in spatial terms (top, left panel, bottom row, central circle, etc.) incorporating the hero stat, supporting concepts, and actionable steps as labelled visual elements
-3. Explicitly describes the art style in full detail using the provided style description
-4. Specifies typography hierarchy (headline font treatment, body labels, callout stats), color palette, background treatment, and overall mood
+Using your structured content from Phase 1, construct a single detailed image generation prompt that:
+1. Opens with the infographic title and layout structure
+2. Describes each visual section in spatial terms (top, left panel, bottom row, central circle, etc.)
+3. Explicitly describes the art style using the provided style description
+4. Specifies typography hierarchy, color palette, background treatment, and mood
 5. Ends with technical quality descriptors (resolution, rendering style, professional quality)
 
 ## RULES
-- Treat the user's raw input as your only source — extract real insights from it, don't invent generic placeholder content
-- The hero stat should lead visually — it's the first thing the eye lands on
-- Language must be consistent (match the language of the user's input)
-- Return ONLY the final image prompt text from Phase 2. No preamble, no phase labels, no markdown formatting, no explanation. Just the raw prompt.`;
+- Treat the user's raw input as the ONLY content source — extract real insights, never invent placeholders
+- The hero stat must lead visually
+- Language must match the user's input language
+- Return ONLY the final image prompt from Phase 2. No preamble, no labels, no markdown, no explanation.`;
 
   try {
+    const useVision = !!referenceImageBase64;
+    const model = useVision
+      ? (process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.0-flash-001')
+      : (process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet');
+
+    const userContent = useVision
+      ? [
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${referenceImageBase64}` } },
+        { type: 'text', text: `Topic: ${topic}\n\nArt Style: ${style}${brandSection}${referenceNote}` }
+      ]
+      : `Topic: ${topic}\n\nArt Style: ${style}${brandSection}`;
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -63,10 +113,10 @@ Using your structured content from Phase 1, construct a single, detailed, highly
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Topic: ${topic}\n\nArt Style: ${style}` }
+          { role: 'user', content: userContent }
         ]
       })
     });
@@ -78,10 +128,7 @@ Using your structured content from Phase 1, construct a single, detailed, highly
 
     const data = await response.json();
     const prompt = data.choices?.[0]?.message?.content?.trim();
-
-    if (!prompt) {
-      return res.status(500).json({ error: 'No prompt returned from OpenRouter' });
-    }
+    if (!prompt) return res.status(500).json({ error: 'No prompt returned from OpenRouter' });
 
     res.json({ prompt });
   } catch (err) {
@@ -89,6 +136,7 @@ Using your structured content from Phase 1, construct a single, detailed, highly
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
+
 
 // POST /generate-image - kie.ai createTask
 app.post('/generate-image', async (req, res) => {
