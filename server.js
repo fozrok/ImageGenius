@@ -161,10 +161,16 @@ Using your structured content from Phase 1, construct a single detailed image ge
 
 // POST /generate-image - kie.ai createTask
 app.post('/generate-image', generateLimiter, async (req, res) => {
-  const { prompt, resolution, aspectRatio, outputFormat } = req.body;
+  const { prompt, resolution, aspectRatio, outputFormat, referenceImageBase64, referenceImageMime } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Missing prompt' });
+  }
+
+  // Build image_input array — include reference image if provided
+  const imageInput = [];
+  if (referenceImageBase64 && referenceImageMime) {
+    imageInput.push(`data:${referenceImageMime};base64,${referenceImageBase64}`);
   }
 
   try {
@@ -178,7 +184,7 @@ app.post('/generate-image', generateLimiter, async (req, res) => {
         model: 'nano-banana-pro',
         input: {
           prompt,
-          image_input: [],
+          image_input: imageInput,
           aspect_ratio: aspectRatio || '1:1',
           resolution: resolution || '1K',
           output_format: outputFormat || 'png'
@@ -475,7 +481,8 @@ app.post('/thumbnail-prompt', refineLimiter, async (req, res) => {
     videoTitle, topic, niche, desiredEmotion, subjectPreference,
     brandColors, headlineText, subtextText,
     loopOverride, curiosityGapOverride, styleTag, expressionOverride,
-    colorPreset, customAccentHex, layoutOverride
+    colorPreset, customAccentHex, layoutOverride,
+    referenceImageBase64, referenceImageMime
   } = req.body;
 
   if (!videoTitle || !topic) {
@@ -571,8 +578,31 @@ Subtext: ${subtextText || '(AI to suggest)'}
 Colours: ${colorSection}
 ${overrides ? `\nUser overrides:\n${overrides}` : ''}`;
 
+  const hasReferenceImage = !!referenceImageBase64;
+  const referenceNote = hasReferenceImage
+    ? '\nA reference photo of the person has been provided. Study their likeness carefully: note their hair colour, eye colour, skin tone, facial structure, any distinctive features, and approximate age. Incorporate a precise description of this person into all three thumbnail prompts so the image generator can reproduce their likeness accurately.'
+    : '';
+
   try {
-    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
+    // Use vision model if reference image provided, otherwise text model
+    const textModel = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
+    const visionModel = process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.0-flash-001';
+    const model = hasReferenceImage ? visionModel : textModel;
+
+    // Build user message — multimodal if image is present
+    const userContent = hasReferenceImage
+      ? [
+        {
+          type: 'image_url',
+          image_url: { url: `data:${referenceImageMime};base64,${referenceImageBase64}` }
+        },
+        {
+          type: 'text',
+          text: userMessage + referenceNote
+        }
+      ]
+      : userMessage;
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -583,7 +613,7 @@ ${overrides ? `\nUser overrides:\n${overrides}` : ''}`;
         model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
+          { role: 'user', content: userContent }
         ]
       })
     });

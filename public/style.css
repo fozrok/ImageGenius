@@ -2089,3 +2089,86 @@ textarea:focus {
   color: var(--text-muted, #888);
   margin: 0;
 }
+
+/* ── Reference Image Upload Zone (Q4) ── */
+.tn-ref-upload-zone {
+  margin-top: 18px;
+  animation: tn-slide-in 0.22s ease;
+}
+
+.tn-ref-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 2px dashed var(--border-default, rgba(255, 255, 255, 0.15));
+  border-radius: 12px;
+  padding: 22px 20px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: default;
+}
+
+.tn-ref-drop.drag-over {
+  border-color: var(--color-accent, #7c5cfc);
+  background: rgba(124, 92, 252, 0.06);
+}
+
+.tn-ref-icon {
+  font-size: 28px;
+}
+
+.tn-ref-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.tn-ref-optional {
+  font-weight: 400;
+  color: var(--text-muted, #888);
+  font-size: 12px;
+}
+
+.tn-ref-hint {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin: 0;
+}
+
+.tn-ref-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface-input, rgba(255, 255, 255, 0.04));
+  border: 1.5px solid var(--border-default, rgba(255, 255, 255, 0.09));
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.tn-ref-preview img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.tn-ref-preview-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tn-ref-name {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}

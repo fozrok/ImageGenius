@@ -119,6 +119,8 @@ let tnSelectedStyle = null;
 let tnSelectedExpression = null;
 let tnSelectedColorPreset = null;
 let tnCustomAccent = '';
+let tnReferenceImageBase64 = null;  // base64 likeness photo for Q4
+let tnReferenceImageMime = null;
 let tnGenTasks = { offset: null, centered: null, splitScreen: null };
 let tnGenResults = { offset: null, centered: null, splitScreen: null };
 let tnPollingIntervals = {};
@@ -198,8 +200,20 @@ function renderTnStep() {
             chip.addEventListener('click', () => {
                 container.querySelectorAll('.tn-chip').forEach(c => c.classList.remove('selected'));
                 chip.classList.add('selected');
+                // Q4: show/hide reference image upload zone
+                if (q.id === 'subjectPreference') {
+                    const isPersonSelected = !chip.dataset.value.startsWith('No');
+                    tnToggleReferenceUpload(isPersonSelected);
+                }
             });
         });
+        // Q4: restore upload zone visibility based on saved answer
+        if (q.id === 'subjectPreference') {
+            const savedAnswer = saved || '';
+            if (savedAnswer && !savedAnswer.startsWith('No')) {
+                tnToggleReferenceUpload(true);
+            }
+        }
     }
 
     // Wire color preset selection
@@ -296,7 +310,9 @@ async function tnAnalyse() {
         headlineText: tnAnswers.headlineText || '',
         subtextText: tnAnswers.subtextText || '',
         colorPreset: colourPresetName,
-        customAccentHex: tnCustomAccent || null
+        customAccentHex: tnCustomAccent || null,
+        referenceImageBase64: tnReferenceImageBase64 || null,
+        referenceImageMime: tnReferenceImageMime || null
     };
 
     try {
@@ -504,7 +520,14 @@ async function tnGenerate() {
             const res = await fetch('/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, resolution: '2K', aspectRatio: '16:9', outputFormat: 'png' })
+                body: JSON.stringify({
+                    prompt,
+                    resolution: '2K',
+                    aspectRatio: '16:9',
+                    outputFormat: 'png',
+                    referenceImageBase64: tnReferenceImageBase64 || null,
+                    referenceImageMime: tnReferenceImageMime || null
+                })
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
@@ -648,6 +671,90 @@ function renderTnTemplateList() {
 
 /* ─── Utilities ───────────────────────────────────────────────────────── */
 
+/* ─── Reference Image Upload (Q4) ────────────────────────────────────── */
+
+function tnToggleReferenceUpload(show) {
+    const existing = document.getElementById('tn-ref-upload-zone');
+    if (!show) {
+        if (existing) existing.remove();
+        tnReferenceImageBase64 = null;
+        tnReferenceImageMime = null;
+        return;
+    }
+    if (existing) return; // already shown
+
+    const zone = document.createElement('div');
+    zone.id = 'tn-ref-upload-zone';
+    zone.className = 'tn-ref-upload-zone';
+    zone.innerHTML = `
+        <input type="file" id="tn-ref-file-input" accept="image/png,image/jpeg,image/webp" style="display:none" />
+        <div id="tn-ref-drop" class="tn-ref-drop">
+            <span class="tn-ref-icon">🖼</span>
+            <p class="tn-ref-label">Upload a reference photo <span class="tn-ref-optional">(optional)</span></p>
+            <p class="tn-ref-hint">AI will describe their likeness and bake it into all 3 prompts</p>
+            <button class="btn-secondary" id="btn-tn-ref-browse" style="font-size:12px;padding:6px 14px;">Browse…</button>
+        </div>
+        <div id="tn-ref-preview" class="tn-ref-preview hidden">
+            <img id="tn-ref-preview-img" alt="Reference photo" />
+            <div class="tn-ref-preview-info">
+                <span id="tn-ref-preview-name" class="tn-ref-name"></span>
+                <button class="btn-secondary" id="btn-tn-ref-remove" style="font-size:11px;padding:4px 10px;">✕ Remove</button>
+            </div>
+        </div>`;
+
+    // Insert after the chip group
+    const card = document.querySelector('.tn-question-card');
+    if (card) card.appendChild(zone);
+
+    // Wire file browsing
+    document.getElementById('btn-tn-ref-browse').addEventListener('click', () =>
+        document.getElementById('tn-ref-file-input').click());
+
+    document.getElementById('tn-ref-file-input').addEventListener('change', e => {
+        const file = e.target.files?.[0];
+        if (file) tnLoadReferenceFile(file);
+    });
+
+    // Wire drag-and-drop
+    const dropTarget = document.getElementById('tn-ref-drop');
+    dropTarget.addEventListener('dragover', e => { e.preventDefault(); dropTarget.classList.add('drag-over'); });
+    dropTarget.addEventListener('dragleave', () => dropTarget.classList.remove('drag-over'));
+    dropTarget.addEventListener('drop', e => {
+        e.preventDefault();
+        dropTarget.classList.remove('drag-over');
+        const file = e.dataTransfer.files?.[0];
+        if (file) tnLoadReferenceFile(file);
+    });
+
+    // Remove button
+    document.getElementById('btn-tn-ref-remove')?.addEventListener('click', () => {
+        tnReferenceImageBase64 = null;
+        tnReferenceImageMime = null;
+        document.getElementById('tn-ref-drop').classList.remove('hidden');
+        document.getElementById('tn-ref-preview').classList.add('hidden');
+        document.getElementById('tn-ref-file-input').value = '';
+    });
+}
+
+function tnLoadReferenceFile(file) {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+        const dataUrl = e.target.result;
+        // Strip data: prefix to get pure base64
+        tnReferenceImageBase64 = dataUrl.split(',')[1];
+        tnReferenceImageMime = file.type;
+        // Show preview
+        document.getElementById('tn-ref-drop').classList.add('hidden');
+        const preview = document.getElementById('tn-ref-preview');
+        preview.classList.remove('hidden');
+        document.getElementById('tn-ref-preview-img').src = dataUrl;
+        document.getElementById('tn-ref-preview-name').textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+}
+
 function tnReset() {
     tnCurrentStep = 0;
     tnAnswers = {};
@@ -657,6 +764,8 @@ function tnReset() {
     tnSelectedExpression = null;
     tnSelectedColorPreset = null;
     tnCustomAccent = '';
+    tnReferenceImageBase64 = null;
+    tnReferenceImageMime = null;
     tnGenResults = { offset: null, centered: null, splitScreen: null };
     Object.values(tnPollingIntervals).forEach(clearInterval);
     Object.values(tnPollingTimeouts).forEach(clearTimeout);
