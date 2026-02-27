@@ -4,6 +4,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import HOOKS_LIBRARY from './hooks-library.js';
 
 dotenv.config();
 
@@ -471,6 +472,100 @@ The same structural prompt but with ALL content-specific details replaced with f
     res.json({ exactPrompt, templatePrompt });
   } catch (err) {
     console.error('Error in /reverse-engineer:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// POST /thumbnail-idea - analyse raw user idea and suggest hooks, feeling, headline, subtext
+app.post('/thumbnail-idea', refineLimiter, async (req, res) => {
+  const { rawIdea } = req.body;
+  if (!rawIdea?.trim()) {
+    return res.status(400).json({ error: 'rawIdea is required' });
+  }
+
+  // Format the hook library as a readable list for the prompt
+  const hooksByCategory = {};
+  HOOKS_LIBRARY.forEach(h => {
+    if (!hooksByCategory[h.category]) hooksByCategory[h.category] = [];
+    hooksByCategory[h.category].push(h.template);
+  });
+  const hooksText = Object.entries(hooksByCategory).map(([cat, templates]) =>
+    `${cat}:\n${templates.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}`
+  ).join('\n\n');
+
+  const systemPrompt = `You are an expert YouTube thumbnail strategist and hook writer.
+
+You have access to the following hook template library. Each template uses [Placeholders] you fill in with the user's topic:
+
+${hooksText}
+
+## Your Task
+Analyse the user's raw idea and return exactly this JSON (no markdown fences, no extra text):
+
+{
+  "topic": "concise 3-8 word description of the main topic",
+  "hooks": [
+    { "category": "CategoryName", "text": "Fully written hook with placeholders replaced — ready to use as a YouTube title" },
+    { "category": "CategoryName", "text": "Second hook from a different category" },
+    { "category": "CategoryName", "text": "Third hook from a different category" }
+  ],
+  "recommendedFeeling": "one of: Curious, Shocked, Inspired, Concerned, Excited, Confident",
+  "headlineSuggestion": "3-5 word bold headline for the thumbnail overlay",
+  "subtextSuggestion": "short secondary line (optional, 3-6 words)"
+}
+
+Rules:
+- All 3 hooks must be from DIFFERENT categories
+- Fill all [Placeholders] with the user's actual topic
+- Hooks should be real, compelling, immediately usable as YouTube titles
+- headlineSuggestion must be SHORT — it appears as large text on a thumbnail (max 5 words)
+- Return ONLY the JSON object`;
+
+  try {
+    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `My video idea:\n${rawIdea.trim()}` }
+        ],
+        max_tokens: 600
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: `OpenRouter error: ${errorText}` });
+    }
+
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content?.trim();
+    if (!raw) return res.status(500).json({ error: 'No response from AI' });
+
+    let cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) cleaned = jsonMatch[0];
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      return res.status(500).json({ error: 'AI returned invalid JSON', raw });
+    }
+
+    if (!parsed.hooks?.length || !parsed.topic) {
+      return res.status(500).json({ error: 'AI response missing required fields', parsed });
+    }
+
+    res.json(parsed);
+  } catch (err) {
+    console.error('Error in /thumbnail-idea:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });

@@ -1,66 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════════════
    THUMBNAILS TAB — thumbnail-tab.js
-   Implements the full AI Thumbnail Creator system from the spec
+   2-Step flow: raw idea input → AI hook analysis → selection panel → generate
 ═══════════════════════════════════════════════════════════════════════ */
 
 /* ─── Constants ───────────────────────────────────────────────────────── */
 
-const TN_QUESTIONS = [
-    {
-        id: 'videoTitle',
-        label: 'Q1 — What is your video title?',
-        hint: 'The full title you plan to use on YouTube',
-        type: 'textarea',
-        placeholder: 'e.g. How I Made $10K With Bitcoin in 30 Days',
-        required: true
-    },
-    {
-        id: 'topicNiche',
-        label: 'Q2 — What is the main topic or niche?',
-        hint: 'e.g. Crypto education, Hypnotherapy, Aviation, Motivational',
-        type: 'text',
-        placeholder: 'e.g. Bitcoin wallets / Crypto education',
-        required: true
-    },
-    {
-        id: 'desiredEmotion',
-        label: 'Q3 — What do you want the viewer to FEEL?',
-        hint: 'Select the emotion that drives the click',
-        type: 'chips',
-        options: ['Curious', 'Shocked', 'Inspired', 'Concerned', 'Excited', 'Confident'],
-        required: true
-    },
-    {
-        id: 'subjectPreference',
-        label: 'Q4 — Do you want a person in the image?',
-        hint: 'Who or what appears as the hero subject',
-        type: 'chips',
-        options: ['Yes — Woman', 'Yes — Man', 'Yes — Couple', 'No — Symbolic only'],
-        required: true
-    },
-    {
-        id: 'headlineText',
-        label: 'Q5 — What headline text goes on the thumbnail?',
-        hint: 'Short, punchy text overlay (leave blank for AI to suggest)',
-        type: 'text',
-        placeholder: 'e.g. CRYPTO BASICS',
-        required: false
-    },
-    {
-        id: 'subtextText',
-        label: 'Q6 — Subtext line? (optional)',
-        hint: 'Secondary line below the headline',
-        type: 'text',
-        placeholder: 'e.g. Step 1 of 9',
-        required: false
-    },
-    {
-        id: 'brandColors',
-        label: 'Q7 — Brand colours? (optional)',
-        hint: 'Paste hex codes or choose a preset below',
-        type: 'colorpicker',
-        required: false
-    }
+const TN_FEELINGS = ['Curious', 'Shocked', 'Inspired', 'Concerned', 'Excited', 'Confident'];
+
+const TN_PEOPLE_OPTIONS = ['Yes — Woman', 'Yes — Man', 'Yes — Couple', 'No — Symbolic only'];
+
+const TN_COLOR_PRESETS = [
+    { id: 'teal_authority', label: 'Teal Authority', bg: '#001213', accent: '#219da0', swatches: ['#001213', '#219da0', '#ffffff'] },
+    { id: 'hypno_magenta', label: 'Hypno Magenta', bg: '#0a0010', accent: '#d63384', swatches: ['#0a0010', '#d63384', '#ffffff'] },
+    { id: 'gold_authority', label: 'Gold Authority', bg: '#0d0d0d', accent: '#c9a84c', swatches: ['#0d0d0d', '#c9a84c', '#ffffff'] },
+    { id: 'power_red', label: 'Power Red', bg: '#0a0000', accent: '#e63946', swatches: ['#0a0000', '#e63946', '#ffffff'] },
+    { id: 'calm_purple', label: 'Calm Purple', bg: '#0f0020', accent: '#7b2fbe', swatches: ['#0f0020', '#7b2fbe', '#ffffff'] },
+    { id: 'clean_white', label: 'Clean White', bg: '#ffffff', accent: '#1a1a2e', swatches: ['#ffffff', '#1a1a2e', '#333333'] },
+    { id: 'warm_amber', label: 'Warm Amber', bg: '#1a0f00', accent: '#f4a261', swatches: ['#1a0f00', '#f4a261', '#ffffff'] }
 ];
 
 const TN_CURIOSITY_GAPS = [
@@ -92,16 +48,6 @@ const TN_EXPRESSIONS = [
     { id: 'determined', label: 'Determined', emoji: '😤', intent: 'Challenge / Tension' }
 ];
 
-const TN_COLOR_PRESETS = [
-    { id: 'zionix', label: 'Zionix Global', bg: '#001213', accent: '#219da0', swatches: ['#001213', '#219da0', '#ffffff'] },
-    { id: 'hypno_magenta', label: 'Hypno Magenta', bg: '#0a0010', accent: '#d63384', swatches: ['#0a0010', '#d63384', '#ffffff'] },
-    { id: 'gold_authority', label: 'Gold Authority', bg: '#0d0d0d', accent: '#c9a84c', swatches: ['#0d0d0d', '#c9a84c', '#ffffff'] },
-    { id: 'power_red', label: 'Power Red', bg: '#0a0000', accent: '#e63946', swatches: ['#0a0000', '#e63946', '#ffffff'] },
-    { id: 'calm_purple', label: 'Calm Purple', bg: '#0f0020', accent: '#7b2fbe', swatches: ['#0f0020', '#7b2fbe', '#ffffff'] },
-    { id: 'clean_white', label: 'Clean White', bg: '#ffffff', accent: '#1a1a2e', swatches: ['#ffffff', '#1a1a2e', '#333333'] },
-    { id: 'warm_amber', label: 'Warm Amber', bg: '#1a0f00', accent: '#f4a261', swatches: ['#1a0f00', '#f4a261', '#ffffff'] }
-];
-
 const LOOP_COLORS = {
     desire: { label: 'Desire Loop', color: '#4A9EF5', desc: 'Pain point + Solution — show the end state' },
     interest: { label: 'Interest Loop', color: '#9D50BB', desc: 'Entertainment / Curiosity — show the tension' },
@@ -111,17 +57,29 @@ const LOOP_COLORS = {
 
 /* ─── State ───────────────────────────────────────────────────────────── */
 
-let tnCurrentStep = 0;
-let tnAnswers = {};
-let tnAnalysis = null;
+let tnRawIdea = '';
+let tnIdeaResult = null;           // response from /thumbnail-idea
+let tnAnalysis = null;             // response from /thumbnail-prompt
+
+// User selections
+let tnSelectedHook = null;         // { category, text }
+let tnSelectedFeeling = null;
+let tnSelectedPerson = null;
+let tnSelectedColorPreset = null;
+let tnCustomAccent = '';
+let tnHeadline = '';
+let tnSubtext = '';
+
+// Results overrides (post-analysis)
 let tnSelectedGap = null;
 let tnSelectedStyle = null;
 let tnSelectedExpression = null;
-let tnSelectedColorPreset = null;
-let tnCustomAccent = '';
-let tnReferenceImageBase64 = null;  // base64 likeness photo for Q4
+
+// Reference image
+let tnReferenceImageBase64 = null;
 let tnReferenceImageMime = null;
-let tnGenTasks = { offset: null, centered: null, splitScreen: null };
+
+// Generation
 let tnGenResults = { offset: null, centered: null, splitScreen: null };
 let tnPollingIntervals = {};
 let tnPollingTimeouts = {};
@@ -131,184 +89,239 @@ let tnSavedTemplates = [];
 
 function initThumbnailsTab() {
     tnSavedTemplates = JSON.parse(localStorage.getItem('tn_templates') || '[]');
-    renderTnStep();
-    document.getElementById('btn-tn-back').addEventListener('click', tnBack);
-    document.getElementById('btn-tn-next').addEventListener('click', tnNext);
-    document.getElementById('btn-tn-analyse').addEventListener('click', tnAnalyse);
-    document.getElementById('btn-tn-generate').addEventListener('click', tnGenerate);
-    document.getElementById('btn-tn-reset-analyse').addEventListener('click', tnReset);
+    renderTnIdea();
+    document.getElementById('btn-tn-analyse-idea').addEventListener('click', tnAnalyseIdea);
+    document.getElementById('btn-tn-build').addEventListener('click', tnBuildAndGenerate);
+    document.getElementById('btn-tn-reset-idea').addEventListener('click', tnReset);
     document.getElementById('btn-tn-reset-results').addEventListener('click', tnReset);
+    document.getElementById('btn-tn-generate').addEventListener('click', tnGenerate);
     document.getElementById('btn-tn-save-template').addEventListener('click', tnSaveTemplate);
     renderTnTemplateList();
 }
 
-/* ─── Intake Wizard ───────────────────────────────────────────────────── */
+/* ─── STEP 1 — Raw Idea Input ─────────────────────────────────────────── */
 
-function renderTnStep() {
-    const q = TN_QUESTIONS[tnCurrentStep];
-    const container = document.getElementById('tn-question-container');
-    const progress = document.getElementById('tn-progress');
-    const backBtn = document.getElementById('btn-tn-back');
-    const nextBtn = document.getElementById('btn-tn-next');
-
-    // Progress bar
-    progress.style.width = `${((tnCurrentStep + 1) / TN_QUESTIONS.length) * 100}%`;
-    document.getElementById('tn-step-count').textContent = `Question ${tnCurrentStep + 1} of ${TN_QUESTIONS.length}`;
-
-    backBtn.classList.toggle('hidden', tnCurrentStep === 0);
-    nextBtn.textContent = tnCurrentStep === TN_QUESTIONS.length - 1 ? 'Analyse ✦' : 'Continue →';
-
-    const saved = tnAnswers[q.id] || '';
-
-    let inputHtml = '';
-
-    if (q.type === 'textarea') {
-        inputHtml = `<textarea id="tn-input" class="tn-intake-input tn-intake-textarea" placeholder="${q.placeholder}" rows="3">${saved}</textarea>`;
-    } else if (q.type === 'text') {
-        inputHtml = `<input id="tn-input" class="tn-intake-input" type="text" placeholder="${q.placeholder}" value="${saved}" />`;
-    } else if (q.type === 'chips') {
-        inputHtml = `<div class="tn-chip-group" id="tn-chip-group">
-            ${q.options.map(opt => `<button class="tn-chip ${saved === opt ? 'selected' : ''}" data-value="${opt}">${opt}</button>`).join('')}
-        </div>`;
-    } else if (q.type === 'colorpicker') {
-        const colorChips = TN_COLOR_PRESETS.map(p => `
-            <button class="tn-color-chip ${saved === p.id ? 'selected' : ''}" data-preset="${p.id}" title="${p.label}">
-                <span class="tn-color-swatch" style="background:${p.swatches[0]}"></span>
-                <span class="tn-color-swatch" style="background:${p.swatches[1]}"></span>
-                <span class="tn-color-chip-label">${p.label}</span>
-            </button>`).join('');
-        inputHtml = `
-            <div class="tn-color-presets" id="tn-color-preset-group">${colorChips}</div>
-            <div class="tn-custom-hex-row">
-                <span style="font-size:12px;color:var(--text-muted,#8888aa)">Custom accent hex:</span>
-                <input id="tn-custom-hex" class="tn-hex-input" type="text" maxlength="7" placeholder="#FF0000" value="${tnCustomAccent}" />
-                <span id="tn-hex-preview" class="tn-hex-preview" style="background:${tnCustomAccent || 'transparent'}"></span>
-            </div>
-            <p class="tn-skip-hint">Skip to let AI choose the best colour for your topic.</p>`;
-    }
-
-    container.innerHTML = `
-        <div class="tn-question-card">
-            <label class="tn-question-label">${q.label}</label>
-            <p class="tn-question-hint">${q.hint}</p>
-            ${inputHtml}
-        </div>`;
-
-    // Wire chip selection
-    if (q.type === 'chips') {
-        container.querySelectorAll('.tn-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                container.querySelectorAll('.tn-chip').forEach(c => c.classList.remove('selected'));
-                chip.classList.add('selected');
-                // Q4: show/hide reference image upload zone
-                if (q.id === 'subjectPreference') {
-                    const isPersonSelected = !chip.dataset.value.startsWith('No');
-                    tnToggleReferenceUpload(isPersonSelected);
-                }
-            });
-        });
-        // Q4: restore upload zone visibility based on saved answer
-        if (q.id === 'subjectPreference') {
-            const savedAnswer = saved || '';
-            if (savedAnswer && !savedAnswer.startsWith('No')) {
-                tnToggleReferenceUpload(true);
-            }
-        }
-    }
-
-    // Wire color preset selection
-    if (q.type === 'colorpicker') {
-        container.querySelectorAll('.tn-color-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                container.querySelectorAll('.tn-color-chip').forEach(c => c.classList.remove('selected'));
-                chip.classList.add('selected');
-                tnSelectedColorPreset = chip.dataset.preset;
-            });
-        });
-        const hexInput = document.getElementById('tn-custom-hex');
-        const hexPreview = document.getElementById('tn-hex-preview');
-        hexInput.addEventListener('input', () => {
-            const val = hexInput.value;
-            tnCustomAccent = val;
-            hexPreview.style.background = /^#[0-9a-f]{6}$/i.test(val) ? val : 'transparent';
-        });
-    }
+function renderTnIdea() {
+    const el = document.getElementById('tn-idea-input');
+    if (el) el.value = tnRawIdea;
 }
 
-function tnGetCurrentAnswer() {
-    const q = TN_QUESTIONS[tnCurrentStep];
-    if (q.type === 'chips') {
-        const selected = document.querySelector('#tn-chip-group .tn-chip.selected');
-        return selected ? selected.dataset.value : '';
-    }
-    if (q.type === 'colorpicker') {
-        const selectedPreset = document.querySelector('#tn-color-preset-group .tn-color-chip.selected');
-        return selectedPreset ? selectedPreset.dataset.preset : '';
-    }
-    const input = document.getElementById('tn-input');
-    return input ? input.value.trim() : '';
-}
-
-function tnNext() {
-    const q = TN_QUESTIONS[tnCurrentStep];
-    const answer = tnGetCurrentAnswer();
-    if (q.required && !answer) {
-        document.getElementById('tn-question-container').querySelector('.tn-question-card').classList.add('tn-shake');
-        setTimeout(() => document.querySelector('.tn-question-card')?.classList.remove('tn-shake'), 500);
+async function tnAnalyseIdea() {
+    const textarea = document.getElementById('tn-idea-input');
+    const rawIdea = textarea?.value.trim();
+    if (!rawIdea) {
+        textarea?.classList.add('tn-shake');
+        setTimeout(() => textarea?.classList.remove('tn-shake'), 500);
         return;
     }
-    tnAnswers[q.id] = answer;
-    if (tnCurrentStep < TN_QUESTIONS.length - 1) {
-        tnCurrentStep++;
-        renderTnStep();
-    } else {
-        // Last question done — move to analysis
-        tnShowAnalysePanel();
-    }
-}
+    tnRawIdea = rawIdea;
 
-function tnBack() {
-    if (tnCurrentStep > 0) {
-        tnAnswers[TN_QUESTIONS[tnCurrentStep].id] = tnGetCurrentAnswer();
-        tnCurrentStep--;
-        renderTnStep();
-    }
-}
-
-function tnShowAnalysePanel() {
-    document.getElementById('tn-section-intake').classList.add('hidden');
-    document.getElementById('tn-section-analyse').classList.remove('hidden');
-    // Pre-populate summary
-    const summary = document.getElementById('tn-answers-summary');
-    summary.innerHTML = Object.entries(tnAnswers).filter(([, v]) => v).map(([k, v]) => {
-        const q = TN_QUESTIONS.find(q => q.id === k);
-        return `<div class="tn-summary-row"><span class="tn-summary-key">${q ? q.label.split('—')[0].trim() : k}</span><span class="tn-summary-val">${v}</span></div>`;
-    }).join('');
-}
-
-/* ─── AI Analysis ─────────────────────────────────────────────────────── */
-
-async function tnAnalyse() {
-    const btn = document.getElementById('btn-tn-analyse');
-    const statusEl = document.getElementById('tn-analyse-status');
+    const btn = document.getElementById('btn-tn-analyse-idea');
+    const statusEl = document.getElementById('tn-idea-status');
     btn.disabled = true;
-    btn.textContent = 'Analysing…';
-    statusEl.textContent = 'Calling AI — assembling psychology framework…';
+    btn.textContent = 'Analysing your idea…';
+    statusEl.textContent = 'Reading your idea and matching hooks from the library…';
     statusEl.classList.remove('hidden', 'error');
+
+    try {
+        const res = await fetch('/thumbnail-idea', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rawIdea })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Server error');
+
+        tnIdeaResult = data;
+        // Pre-fill selections from AI suggestions
+        tnSelectedHook = data.hooks[0];         // first hook pre-selected
+        tnSelectedFeeling = data.recommendedFeeling;
+        tnHeadline = data.headlineSuggestion || '';
+        tnSubtext = data.subtextSuggestion || '';
+
+        statusEl.classList.add('hidden');
+        renderTnSelectionPanel();
+    } catch (err) {
+        statusEl.textContent = '✗ ' + err.message;
+        statusEl.classList.add('error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '✦ Analyse My Idea';
+    }
+}
+
+/* ─── STEP 2 — Selection Panel ────────────────────────────────────────── */
+
+function renderTnSelectionPanel() {
+    document.getElementById('tn-section-idea').classList.add('hidden');
+    const panel = document.getElementById('tn-section-selection');
+    panel.classList.remove('hidden');
+
+    renderHookPicker();
+    renderFeelingPicker();
+    renderPersonPicker();
+    renderTnColorPicker();
+    renderHeadlineFields();
+}
+
+function renderHookPicker() {
+    const el = document.getElementById('tn-hook-picker');
+    if (!el || !tnIdeaResult?.hooks) return;
+
+    el.innerHTML = tnIdeaResult.hooks.map((hook, i) => `
+        <div class="tn-hook-card ${i === 0 ? 'selected' : ''}" data-hook-idx="${i}" tabindex="0" role="radio" aria-checked="${i === 0}">
+            <span class="tn-hook-category">${hook.category}</span>
+            <p class="tn-hook-text" id="tn-hook-text-${i}">${escHtml(hook.text)}</p>
+            <textarea class="tn-hook-edit tn-intake-input tn-intake-textarea" rows="2"
+                id="tn-hook-edit-${i}" placeholder="Edit hook text…">${escHtml(hook.text)}</textarea>
+        </div>`).join('');
+
+    // Wire card clicks
+    el.querySelectorAll('.tn-hook-card').forEach(card => {
+        card.addEventListener('click', () => {
+            el.querySelectorAll('.tn-hook-card').forEach(c => {
+                c.classList.remove('selected');
+                c.setAttribute('aria-checked', 'false');
+            });
+            card.classList.add('selected');
+            card.setAttribute('aria-checked', 'true');
+            const idx = parseInt(card.dataset.hookIdx);
+            const editEl = document.getElementById(`tn-hook-edit-${idx}`);
+            tnSelectedHook = {
+                category: tnIdeaResult.hooks[idx].category,
+                text: editEl?.value || tnIdeaResult.hooks[idx].text
+            };
+        });
+        // Keep edit textarea in sync with selection state
+        const idx = parseInt(card.dataset.hookIdx);
+        const editEl = document.getElementById(`tn-hook-edit-${idx}`);
+        editEl?.addEventListener('input', () => {
+            if (card.classList.contains('selected')) {
+                tnSelectedHook = { category: tnIdeaResult.hooks[idx].category, text: editEl.value };
+            }
+        });
+        // Prevent card click when clicking textarea
+        editEl?.addEventListener('click', e => e.stopPropagation());
+    });
+
+    // Sync initial selected hook text (first card)
+    const firstEdit = document.getElementById('tn-hook-edit-0');
+    firstEdit?.addEventListener('input', () => {
+        if (tnSelectedHook && tnIdeaResult.hooks[0]) {
+            tnSelectedHook = { category: tnIdeaResult.hooks[0].category, text: firstEdit.value };
+        }
+    });
+}
+
+function renderFeelingPicker() {
+    const el = document.getElementById('tn-feeling-picker');
+    if (!el) return;
+    el.innerHTML = TN_FEELINGS.map(f => `
+        <button class="tn-chip ${tnSelectedFeeling === f ? 'selected' : ''}" data-feeling="${f}">${f}</button>`).join('');
+    el.querySelectorAll('[data-feeling]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            el.querySelectorAll('[data-feeling]').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            tnSelectedFeeling = btn.dataset.feeling;
+        });
+    });
+}
+
+function renderPersonPicker() {
+    const el = document.getElementById('tn-person-picker');
+    if (!el) return;
+    el.innerHTML = TN_PEOPLE_OPTIONS.map(opt => `
+        <button class="tn-chip ${tnSelectedPerson === opt ? 'selected' : ''}" data-person="${escHtml(opt)}">${opt}</button>`).join('');
+    el.querySelectorAll('[data-person]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            el.querySelectorAll('[data-person]').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            tnSelectedPerson = btn.dataset.person;
+            const isPersonSelected = !tnSelectedPerson.startsWith('No');
+            tnToggleReferenceUpload(isPersonSelected);
+        });
+    });
+}
+
+function renderTnColorPicker() {
+    const el = document.getElementById('tn-color-picker');
+    if (!el) return;
+    el.innerHTML = TN_COLOR_PRESETS.map(p => `
+        <button class="tn-color-result-chip ${tnSelectedColorPreset === p.id ? 'selected' : ''}" data-preset="${p.id}" title="${p.label}">
+            <span class="tn-color-swatch" style="background:${p.swatches[0]}"></span>
+            <span class="tn-color-swatch" style="background:${p.swatches[1]}"></span>
+            <span class="tn-color-chip-label">${p.label}</span>
+        </button>`).join('');
+    el.querySelectorAll('[data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            el.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            tnSelectedColorPreset = btn.dataset.preset;
+        });
+    });
+
+    // Custom hex
+    const hexInput = document.getElementById('tn-custom-hex');
+    const hexPreview = document.getElementById('tn-hex-preview');
+    if (hexInput) {
+        hexInput.addEventListener('input', () => {
+            tnCustomAccent = hexInput.value;
+            if (hexPreview) hexPreview.style.background = /^#[0-9a-f]{6}$/i.test(tnCustomAccent) ? tnCustomAccent : 'transparent';
+        });
+    }
+}
+
+function renderHeadlineFields() {
+    const headlineEl = document.getElementById('tn-headline-input');
+    const subtextEl = document.getElementById('tn-subtext-input');
+    if (headlineEl) {
+        headlineEl.value = tnHeadline;
+        headlineEl.addEventListener('input', () => { tnHeadline = headlineEl.value; });
+    }
+    if (subtextEl) {
+        subtextEl.value = tnSubtext;
+        subtextEl.addEventListener('input', () => { tnSubtext = subtextEl.value; });
+    }
+}
+
+/* ─── Build & Analyse → then Generate ────────────────────────────────── */
+
+async function tnBuildAndGenerate() {
+    const btn = document.getElementById('btn-tn-build');
+    const statusEl = document.getElementById('tn-selection-status');
+    btn.disabled = true;
+    btn.textContent = 'Building prompts…';
+    statusEl.textContent = 'AI assembling 3 prompt variations…';
+    statusEl.classList.remove('hidden', 'error');
+
+    // Sync editable fields
+    const headlineEl = document.getElementById('tn-headline-input');
+    const subtextEl = document.getElementById('tn-subtext-input');
+    tnHeadline = headlineEl?.value.trim() || '';
+    tnSubtext = subtextEl?.value.trim() || '';
+
+    // Sync selected hook text
+    const selectedCard = document.querySelector('.tn-hook-card.selected');
+    if (selectedCard) {
+        const idx = parseInt(selectedCard.dataset.hookIdx);
+        const editEl = document.getElementById(`tn-hook-edit-${idx}`);
+        tnSelectedHook = {
+            category: tnIdeaResult?.hooks[idx]?.category || '',
+            text: editEl?.value || tnIdeaResult?.hooks[idx]?.text || ''
+        };
+    }
 
     const colourPresetName = tnSelectedColorPreset
         ? TN_COLOR_PRESETS.find(p => p.id === tnSelectedColorPreset)?.label
-        : tnAnswers.brandColors
-            ? TN_COLOR_PRESETS.find(p => p.id === tnAnswers.brandColors)?.label
-            : null;
+        : null;
 
     const payload = {
-        videoTitle: tnAnswers.videoTitle || '',
-        topic: tnAnswers.topicNiche || '',
-        desiredEmotion: tnAnswers.desiredEmotion || 'Curious',
-        subjectPreference: tnAnswers.subjectPreference || '',
-        headlineText: tnAnswers.headlineText || '',
-        subtextText: tnAnswers.subtextText || '',
+        videoTitle: tnSelectedHook?.text || tnRawIdea,
+        topic: tnIdeaResult?.topic || tnRawIdea,
+        desiredEmotion: tnSelectedFeeling || 'Curious',
+        subjectPreference: tnSelectedPerson || 'No — Symbolic only',
+        headlineText: tnHeadline,
+        subtextText: tnSubtext,
         colorPreset: colourPresetName,
         customAccentHex: tnCustomAccent || null,
         referenceImageBase64: tnReferenceImageBase64 || null,
@@ -335,12 +348,14 @@ async function tnAnalyse() {
         statusEl.classList.add('error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '✦ Analyse';
+        btn.textContent = '✦ Build Prompts & Generate';
     }
 }
 
+/* ─── Results Panel (Analysis, Overrides, Prompts) ───────────────────── */
+
 function renderTnAnalysisPanel() {
-    document.getElementById('tn-section-analyse').classList.add('hidden');
+    document.getElementById('tn-section-selection').classList.add('hidden');
     const panel = document.getElementById('tn-section-results');
     panel.classList.remove('hidden');
 
@@ -357,7 +372,7 @@ function renderTnAnalysisPanel() {
             ${a.attentionTriggers.map(t => `<span class="tn-trigger-chip">${t}</span>`).join('')}
         </div>`;
 
-    // 2-second test + contrast warning
+    // Quality checks
     const tests = document.getElementById('tn-quality-checks');
     tests.innerHTML = `
         <div class="tn-quality-badge ${a.twoSecondTestPass ? 'pass' : 'fail'}">
@@ -369,16 +384,16 @@ function renderTnAnalysisPanel() {
     renderTnGapPicker();
     renderTnStylePicker();
     renderTnExpressionPicker();
-    renderTnColorPicker();
+    renderTnResultColorPicker();
 
     // Prompt previews
     renderTnPromptPreviews();
 
-    // Wire generate button
+    // Show generate button
     document.getElementById('tn-gen-section').classList.remove('hidden');
 }
 
-/* ─── Override Selectors ──────────────────────────────────────────────── */
+/* ─── Override Selectors (Results panel) ─────────────────────────────── */
 
 function renderTnGapPicker() {
     const el = document.getElementById('tn-gap-picker');
@@ -427,7 +442,7 @@ function renderTnExpressionPicker() {
     });
 }
 
-function renderTnColorPicker() {
+function renderTnResultColorPicker() {
     const el = document.getElementById('tn-result-color-picker');
     el.innerHTML = TN_COLOR_PRESETS.map(p => `
         <button class="tn-color-result-chip ${tnSelectedColorPreset === p.id ? 'selected' : ''}" data-preset="${p.id}" title="${p.label}">
@@ -452,7 +467,6 @@ function renderTnPromptPreviews() {
     document.getElementById('tn-prompt-centered').value = a.prompts.centered || '';
     document.getElementById('tn-prompt-split').value = a.prompts.splitScreen || '';
 
-    // Tab switching
     document.querySelectorAll('.tn-prompt-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.tn-prompt-tab').forEach(t => t.classList.remove('active'));
@@ -463,7 +477,6 @@ function renderTnPromptPreviews() {
         });
     });
 
-    // Export .md buttons
     document.querySelectorAll('[data-export-layout]').forEach(btn => {
         btn.addEventListener('click', () => {
             const layout = btn.dataset.exportLayout;
@@ -472,9 +485,10 @@ function renderTnPromptPreviews() {
             const now = new Date();
             const dp = now.toISOString().slice(0, 10).replace(/-/g, '');
             const tp = now.toTimeString().slice(0, 5).replace(':', '');
-            const slug = (tnAnswers.videoTitle || 'thumbnail').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 4).join('-');
+            const slug = (tnSelectedHook?.text || tnRawIdea).toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 4).join('-');
             const filename = `${dp}_${tp}_thumbnail_${layout}_${slug}.md`;
-            const content = `# Thumbnail Prompt — ${layout.charAt(0).toUpperCase() + layout.slice(1)}\n\n> Video: ${tnAnswers.videoTitle || ''}\n> Generated: ${now.toLocaleString()}\n\n---\n\n${promptEl.value.trim()}\n`;
+            const content = `# Thumbnail Prompt — ${layout.charAt(0).toUpperCase() + layout.slice(1)}\n\n> Hook: ${tnSelectedHook?.text || ''}\n> Generated: ${now.toLocaleString()}\n\n---\n\n${promptEl.value.trim()}\n`;
             const blob = new Blob([content], { type: 'text/markdown' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -492,7 +506,6 @@ async function tnGenerate() {
     btn.disabled = true;
     btn.textContent = '⏳ Generating 3 variants…';
 
-    // Clear previous results
     tnGenResults = { offset: null, centered: null, splitScreen: null };
     Object.values(tnPollingIntervals).forEach(clearInterval);
     Object.values(tnPollingTimeouts).forEach(clearTimeout);
@@ -502,9 +515,7 @@ async function tnGenerate() {
     grid.classList.remove('hidden');
     ['offset', 'centered', 'split'].forEach(key => {
         const slot = document.getElementById(`tn-slot-${key}`);
-        if (slot) {
-            slot.innerHTML = `<div class="tn-slot-loading"><div class="tn-slot-spinner"></div><p>${key === 'split' ? 'Split Screen' : key.charAt(0).toUpperCase() + key.slice(1)}</p></div>`;
-        }
+        if (slot) slot.innerHTML = `<div class="tn-slot-loading"><div class="tn-slot-spinner"></div><p>${key === 'split' ? 'Split Screen' : key.charAt(0).toUpperCase() + key.slice(1)}</p></div>`;
     });
 
     const layouts = [
@@ -521,10 +532,7 @@ async function tnGenerate() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt,
-                    resolution: '2K',
-                    aspectRatio: '16:9',
-                    outputFormat: 'png',
+                    prompt, resolution: '2K', aspectRatio: '16:9', outputFormat: 'png',
                     referenceImageBase64: tnReferenceImageBase64 || null,
                     referenceImageMime: tnReferenceImageMime || null
                 })
@@ -544,8 +552,7 @@ async function tnGenerate() {
 
 function tnPollSlot(key, taskId, slotId) {
     const MESSAGES = ['Sending to Nano Banana…', 'Processing…', 'Almost there…', 'Finalising…'];
-    let msgIdx = 0;
-    let elapsed = 0;
+    let msgIdx = 0; let elapsed = 0;
 
     tnPollingIntervals[key] = setInterval(async () => {
         elapsed++;
@@ -590,13 +597,13 @@ function tnRenderSlotSuccess(slotId, key, imageUrl) {
             </div>
         </div>`;
 
-    slot.querySelector(`[data-tn-download]`).addEventListener('click', () => {
+    slot.querySelector('[data-tn-download]').addEventListener('click', () => {
         const now = new Date();
         const dp = now.toISOString().slice(0, 10).replace(/-/g, '');
         const tp = now.toTimeString().slice(0, 5).replace(':', '');
-        const slug = (tnAnswers.videoTitle || 'thumbnail').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 3).join('-');
-        const filename = `${dp}_${tp}_thumbnail_${key}_${slug}.png`;
-        window.location.href = `/download?url=${encodeURIComponent(imageUrl)}&filename=${filename}`;
+        const slug = (tnSelectedHook?.text || tnRawIdea).toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 3).join('-');
+        window.location.href = `/download?url=${encodeURIComponent(imageUrl)}&filename=${dp}_${tp}_thumbnail_${key}_${slug}.png`;
     });
 
     slot.querySelector('.tn-slot-img').addEventListener('click', () => {
@@ -604,74 +611,14 @@ function tnRenderSlotSuccess(slotId, key, imageUrl) {
             const now = new Date();
             const dp = now.toISOString().slice(0, 10).replace(/-/g, '');
             const tp = now.toTimeString().slice(0, 5).replace(':', '');
-            const slug = (tnAnswers.videoTitle || 'thumbnail').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 3).join('-');
+            const slug = (tnSelectedHook?.text || tnRawIdea).toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).slice(0, 3).join('-');
             openImageModal(imageUrl, `${dp}_${tp}_thumbnail_${key}_${slug}.png`);
         }
     });
 }
 
-/* ─── Template Memory ─────────────────────────────────────────────────── */
-
-function tnSaveTemplate() {
-    if (!tnAnalysis) return;
-    const name = prompt('Name this template (e.g. "Zionix Beginner Woman"):');
-    if (!name?.trim()) return;
-    const tpl = {
-        id: `tpl-${Date.now()}`,
-        name: name.trim(),
-        answers: { ...tnAnswers },
-        analysis: { ...tnAnalysis },
-        colorPreset: tnSelectedColorPreset,
-        customAccent: tnCustomAccent,
-        savedAt: new Date().toISOString()
-    };
-    tnSavedTemplates.unshift(tpl);
-    localStorage.setItem('tn_templates', JSON.stringify(tnSavedTemplates));
-    renderTnTemplateList();
-}
-
-function renderTnTemplateList() {
-    const el = document.getElementById('tn-template-list');
-    if (!el) return;
-    if (tnSavedTemplates.length === 0) {
-        el.innerHTML = '<p class="tn-no-templates">No saved templates yet. Analyse + generate a thumbnail, then save it.</p>';
-        return;
-    }
-    el.innerHTML = tnSavedTemplates.map((t, i) => `
-        <div class="tn-template-chip">
-            <span class="tn-template-name">${t.name}</span>
-            <span class="tn-template-date">${new Date(t.savedAt).toLocaleDateString()}</span>
-            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" data-load-tpl="${i}">Load</button>
-            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;color:var(--color-error);" data-del-tpl="${i}">✕</button>
-        </div>`).join('');
-
-    el.querySelectorAll('[data-load-tpl]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tpl = tnSavedTemplates[parseInt(btn.dataset.loadTpl)];
-            tnAnswers = { ...tpl.answers };
-            tnAnalysis = { ...tpl.analysis };
-            tnSelectedColorPreset = tpl.colorPreset;
-            tnCustomAccent = tpl.customAccent || '';
-            tnCurrentStep = TN_QUESTIONS.length - 1;
-            document.getElementById('tn-section-intake').classList.add('hidden');
-            document.getElementById('tn-section-analyse').classList.add('hidden');
-            document.getElementById('tn-section-results').classList.remove('hidden');
-            renderTnAnalysisPanel();
-        });
-    });
-
-    el.querySelectorAll('[data-del-tpl]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            tnSavedTemplates.splice(parseInt(btn.dataset.delTpl), 1);
-            localStorage.setItem('tn_templates', JSON.stringify(tnSavedTemplates));
-            renderTnTemplateList();
-        });
-    });
-}
-
-/* ─── Utilities ───────────────────────────────────────────────────────── */
-
-/* ─── Reference Image Upload (Q4) ────────────────────────────────────── */
+/* ─── Reference Image Upload ──────────────────────────────────────────── */
 
 function tnToggleReferenceUpload(show) {
     const existing = document.getElementById('tn-ref-upload-zone');
@@ -681,7 +628,7 @@ function tnToggleReferenceUpload(show) {
         tnReferenceImageMime = null;
         return;
     }
-    if (existing) return; // already shown
+    if (existing) return;
 
     const zone = document.createElement('div');
     zone.id = 'tn-ref-upload-zone';
@@ -702,20 +649,16 @@ function tnToggleReferenceUpload(show) {
             </div>
         </div>`;
 
-    // Insert after the chip group
-    const card = document.querySelector('.tn-question-card');
-    if (card) card.appendChild(zone);
+    const personSection = document.getElementById('tn-person-picker');
+    if (personSection?.parentElement) personSection.parentElement.appendChild(zone);
 
-    // Wire file browsing
     document.getElementById('btn-tn-ref-browse').addEventListener('click', () =>
         document.getElementById('tn-ref-file-input').click());
-
     document.getElementById('tn-ref-file-input').addEventListener('change', e => {
         const file = e.target.files?.[0];
         if (file) tnLoadReferenceFile(file);
     });
 
-    // Wire drag-and-drop
     const dropTarget = document.getElementById('tn-ref-drop');
     dropTarget.addEventListener('dragover', e => { e.preventDefault(); dropTarget.classList.add('drag-over'); });
     dropTarget.addEventListener('dragleave', () => dropTarget.classList.remove('drag-over'));
@@ -726,7 +669,6 @@ function tnToggleReferenceUpload(show) {
         if (file) tnLoadReferenceFile(file);
     });
 
-    // Remove button
     document.getElementById('btn-tn-ref-remove')?.addEventListener('click', () => {
         tnReferenceImageBase64 = null;
         tnReferenceImageMime = null;
@@ -742,10 +684,8 @@ function tnLoadReferenceFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
         const dataUrl = e.target.result;
-        // Strip data: prefix to get pure base64
         tnReferenceImageBase64 = dataUrl.split(',')[1];
         tnReferenceImageMime = file.type;
-        // Show preview
         document.getElementById('tn-ref-drop').classList.add('hidden');
         const preview = document.getElementById('tn-ref-preview');
         preview.classList.remove('hidden');
@@ -755,15 +695,92 @@ function tnLoadReferenceFile(file) {
     reader.readAsDataURL(file);
 }
 
+/* ─── Template Memory ─────────────────────────────────────────────────── */
+
+function tnSaveTemplate() {
+    if (!tnAnalysis) return;
+    const name = prompt('Name this template (e.g. "Bold Woman Offset" or "Minimalist Dark"):');
+    if (!name?.trim()) return;
+    const tpl = {
+        id: `tpl-${Date.now()}`,
+        name: name.trim(),
+        rawIdea: tnRawIdea,
+        ideaResult: tnIdeaResult,
+        selectedHook: tnSelectedHook,
+        selectedFeeling: tnSelectedFeeling,
+        selectedPerson: tnSelectedPerson,
+        colorPreset: tnSelectedColorPreset,
+        customAccent: tnCustomAccent,
+        headline: tnHeadline,
+        subtext: tnSubtext,
+        analysis: { ...tnAnalysis },
+        savedAt: new Date().toISOString()
+    };
+    tnSavedTemplates.unshift(tpl);
+    localStorage.setItem('tn_templates', JSON.stringify(tnSavedTemplates));
+    renderTnTemplateList();
+}
+
+function renderTnTemplateList() {
+    const el = document.getElementById('tn-template-list');
+    if (!el) return;
+    if (tnSavedTemplates.length === 0) {
+        el.innerHTML = '<p class="tn-no-templates">No saved templates yet. Build & generate a thumbnail, then save it.</p>';
+        return;
+    }
+    el.innerHTML = tnSavedTemplates.map((t, i) => `
+        <div class="tn-template-chip">
+            <span class="tn-template-name">${t.name}</span>
+            <span class="tn-template-date">${new Date(t.savedAt).toLocaleDateString()}</span>
+            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" data-load-tpl="${i}">Load</button>
+            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;color:var(--color-error);" data-del-tpl="${i}">✕</button>
+        </div>`).join('');
+
+    el.querySelectorAll('[data-load-tpl]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tpl = tnSavedTemplates[parseInt(btn.dataset.loadTpl)];
+            tnRawIdea = tpl.rawIdea || '';
+            tnIdeaResult = tpl.ideaResult || null;
+            tnSelectedHook = tpl.selectedHook || null;
+            tnSelectedFeeling = tpl.selectedFeeling || null;
+            tnSelectedPerson = tpl.selectedPerson || null;
+            tnSelectedColorPreset = tpl.colorPreset || null;
+            tnCustomAccent = tpl.customAccent || '';
+            tnHeadline = tpl.headline || '';
+            tnSubtext = tpl.subtext || '';
+            tnAnalysis = { ...tpl.analysis };
+            document.getElementById('tn-section-idea').classList.add('hidden');
+            document.getElementById('tn-section-selection').classList.add('hidden');
+            document.getElementById('tn-section-results').classList.remove('hidden');
+            renderTnAnalysisPanel();
+        });
+    });
+
+    el.querySelectorAll('[data-del-tpl]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            tnSavedTemplates.splice(parseInt(btn.dataset.delTpl), 1);
+            localStorage.setItem('tn_templates', JSON.stringify(tnSavedTemplates));
+            renderTnTemplateList();
+        });
+    });
+}
+
+/* ─── Reset ───────────────────────────────────────────────────────────── */
+
 function tnReset() {
-    tnCurrentStep = 0;
-    tnAnswers = {};
+    tnRawIdea = '';
+    tnIdeaResult = null;
     tnAnalysis = null;
+    tnSelectedHook = null;
+    tnSelectedFeeling = null;
+    tnSelectedPerson = null;
+    tnSelectedColorPreset = null;
+    tnCustomAccent = '';
+    tnHeadline = '';
+    tnSubtext = '';
     tnSelectedGap = null;
     tnSelectedStyle = null;
     tnSelectedExpression = null;
-    tnSelectedColorPreset = null;
-    tnCustomAccent = '';
     tnReferenceImageBase64 = null;
     tnReferenceImageMime = null;
     tnGenResults = { offset: null, centered: null, splitScreen: null };
@@ -771,13 +788,18 @@ function tnReset() {
     Object.values(tnPollingTimeouts).forEach(clearTimeout);
     tnPollingIntervals = {}; tnPollingTimeouts = {};
 
-    document.getElementById('tn-section-intake').classList.remove('hidden');
-    document.getElementById('tn-section-analyse').classList.add('hidden');
+    document.getElementById('tn-section-idea').classList.remove('hidden');
+    document.getElementById('tn-section-selection').classList.add('hidden');
     document.getElementById('tn-section-results').classList.add('hidden');
     document.getElementById('tn-gen-grid').classList.add('hidden');
-    renderTnStep();
+    renderTnIdea();
+}
+
+/* ─── Utilities ───────────────────────────────────────────────────────── */
+
+function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // Self-initialise — this script loads after app.js so init() has already run
 initThumbnailsTab();
-

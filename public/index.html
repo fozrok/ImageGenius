@@ -402,36 +402,78 @@
 
       <div class="tn-intro">
         <h2 class="tn-title">🎬 AI Thumbnail Creator</h2>
-        <p class="tn-subtitle">Answer 7 questions. AI applies the full psychology framework and builds 3 layout
-          variations ready for Nano Banana.</p>
+        <p class="tn-subtitle">Paste your raw idea. AI finds the best hook, feeling, headline — you confirm and
+          generate.</p>
       </div>
 
-      <!-- ── SECTION: Intake Wizard ── -->
-      <section id="tn-section-intake" class="tn-wizard">
-        <div class="tn-progress-bar-track">
-          <div class="tn-progress-bar-fill" id="tn-progress"></div>
-        </div>
-        <p id="tn-step-count" class="tn-step-count">Question 1 of 7</p>
-        <div id="tn-question-container"></div>
-        <div class="tn-intake-nav">
-          <button id="btn-tn-back" class="btn-secondary hidden">← Back</button>
-          <button id="btn-tn-next" class="btn-primary">Continue →</button>
+      <!-- ── SECTION: Step 1 — Raw Idea Input ── -->
+      <section id="tn-section-idea" class="tn-wizard">
+        <label class="tn-question-label" for="tn-idea-input">💡 What's your video about?</label>
+        <p class="tn-question-hint">Paste your raw idea, topic angle, notes, or even a rough script. The more detail the
+          better.</p>
+        <textarea id="tn-idea-input" class="tn-intake-input tn-intake-textarea tn-idea-textarea" rows="5"
+          placeholder="e.g. I want to make a video about how most people lose weight the wrong way — cutting calories too fast. I'll show a step-by-step plan using metabolic cycling that I used to lose 12kg in 10 weeks without losing muscle. My audience is 30-50 year old professionals who are time-poor."></textarea>
+        <div id="tn-idea-status" class="status-message hidden"></div>
+        <div class="tn-intake-nav" style="justify-content:space-between;">
+          <button id="btn-tn-reset-idea" class="btn-secondary">↺ Clear</button>
+          <button id="btn-tn-analyse-idea" class="btn-primary">✦ Analyse My Idea</button>
         </div>
       </section>
 
-      <!-- ── SECTION: Ready to Analyse ── -->
-      <section id="tn-section-analyse" class="tn-wizard hidden">
-        <div class="tn-analyse-header">
-          <h3 class="tn-section-heading">Ready to Analyse</h3>
-          <p class="tn-section-subtext">AI will classify your loop type, select the curiosity gap, triggers, expression,
-            and assemble 3 prompts.</p>
+      <!-- ── SECTION: Step 2 — Selection Panel ── -->
+      <section id="tn-section-selection" class="hidden">
+
+        <!-- Hook Picker -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Choose your Hook <span class="tn-override-label">pick one · editable</span>
+          </h3>
+          <p class="tn-section-subtext">AI selected these from the hooks library based on your idea.</p>
+          <div id="tn-hook-picker" class="tn-hook-picker"></div>
         </div>
-        <div id="tn-answers-summary" class="tn-answers-summary"></div>
-        <div id="tn-analyse-status" class="status-message hidden"></div>
-        <div class="tn-analyse-actions">
-          <button id="btn-tn-analyse" class="btn-primary">✦ Analyse</button>
-          <button id="btn-tn-reset-analyse" class="btn-secondary">↺ Start Over</button>
+
+        <!-- Feeling Picker -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Viewer Feeling <span class="tn-override-label">pre-selected by AI</span></h3>
+          <div id="tn-feeling-picker" class="tn-chip-group"></div>
         </div>
+
+        <!-- Person Picker + Reference Image -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Person in image?</h3>
+          <div id="tn-person-picker" class="tn-chip-group"></div>
+          <!-- Reference image upload zone injected here by JS -->
+        </div>
+
+        <!-- Colour Picker -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Brand Colour <span class="tn-override-label">optional</span></h3>
+          <div id="tn-color-picker" class="tn-color-row"></div>
+          <div class="tn-custom-hex-row" style="margin-top:12px;">
+            <span style="font-size:12px;color:var(--text-muted,#8888aa)">Custom accent hex:</span>
+            <input id="tn-custom-hex" class="tn-hex-input" type="text" maxlength="7" placeholder="#FF0000" />
+            <span id="tn-hex-preview" class="tn-hex-preview" style="background:transparent"></span>
+          </div>
+        </div>
+
+        <!-- Headline + Subtext -->
+        <div class="tn-results-block">
+          <h3 class="tn-selector-heading">Thumbnail Text <span class="tn-override-label">pre-filled · editable</span>
+          </h3>
+          <label class="tn-field-label">Headline (bold overlay text)</label>
+          <input id="tn-headline-input" class="tn-intake-input" type="text" maxlength="60"
+            placeholder="e.g. LOSE 12KG FAST" style="margin-bottom:12px;" />
+          <label class="tn-field-label">Subtext line (optional)</label>
+          <input id="tn-subtext-input" class="tn-intake-input" type="text" maxlength="80"
+            placeholder="e.g. No Gym Required" />
+        </div>
+
+        <!-- Build button -->
+        <div class="tn-results-block">
+          <button id="btn-tn-build" class="btn-primary tn-generate-btn">✦ Build Prompts &amp; Generate</button>
+          <p class="tn-rate-note">Uses 1 analysis credit + 3 generation credits</p>
+          <div id="tn-selection-status" class="status-message hidden" style="margin-top:12px;"></div>
+        </div>
+
       </section>
 
       <!-- ── SECTION: Results + Overrides ── -->
