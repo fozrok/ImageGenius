@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VizBot — AI Infographic Designer</title>
+  <meta name="description" content="Internal tool for generating AI-powered infographics using Nano Banana Pro." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- App Header -->
+  <header>
+    <a href="/" aria-label="VizBot home">
+      <img src="https://i.ibb.co/23bqb8qW/image-genius.png" alt="VizBot" class="header-banner" />
+    </a>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="creation" role="tab" aria-selected="true">🎨 Creation</button>
+    <button class="tab-btn" data-tab="reverse" role="tab" aria-selected="false">🔍 Reverse Engineer</button>
+    <button class="tab-btn" data-tab="mockups" role="tab" aria-selected="false">🖼 Mockups</button>
+  </nav>
+
+  <!-- ═══════════════════════════════════════
+       TAB: Creation
+  ═══════════════════════════════════════ -->
+  <div id="tab-creation" class="tab-panel active">
+    <main>
+
+      <!-- Section 1: Brief Input -->
+      <section id="section-brief">
+        <label for="topic-input">What is your infographic about?</label>
+        <textarea id="topic-input" placeholder="Describe the topic, concept, or message of your infographic..."
+          rows="4"></textarea>
+        <div class="density-row">
+          <label class="density-label">Detail Density</label>
+          <div class="toggle-group" id="density-toggle">
+            <button class="toggle-btn" data-value="Minimal">Minimal</button>
+            <button class="toggle-btn active" data-value="Concise">Concise</button>
+            <button class="toggle-btn" data-value="Detailed">Detailed</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Art Style Selector -->
+      <section id="section-styles">
+        <h2>Select Art Style</h2>
+        <div id="style-grid" class="style-grid">
+          <!-- Cards injected by app.js from STYLES array -->
+        </div>
+      </section>
+
+      <!-- Section 3: Settings Row -->
+      <section id="section-settings">
+        <div class="settings-row">
+          <div class="setting-group">
+            <label>Resolution</label>
+            <div class="toggle-group" id="resolution-toggle">
+              <button class="toggle-btn active" data-value="1K">1K</button>
+              <button class="toggle-btn" data-value="2K">2K</button>
+              <button class="toggle-btn" data-value="4K">4K</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>Aspect Ratio</label>
+            <div class="toggle-group" id="ratio-toggle">
+              <button class="toggle-btn active" data-value="1:1">1:1</button>
+              <button class="toggle-btn" data-value="16:9">16:9</button>
+              <button class="toggle-btn" data-value="9:16">9:16</button>
+              <button class="toggle-btn" data-value="3:4">3:4</button>
+              <button class="toggle-btn" data-value="4:3">4:3</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>Output Format</label>
+            <div class="toggle-group" id="format-toggle">
+              <button class="toggle-btn active" data-value="png">PNG</button>
+              <button class="toggle-btn" data-value="jpg">JPG</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3b: Brand Colours (optional) -->
+      <section id="section-brand">
+        <div class="brand-header">
+          <button id="btn-brand-toggle" class="brand-toggle-btn" aria-expanded="false">
+            <span class="brand-toggle-icon">🎨</span>
+            <span class="brand-toggle-label">Brand Colours</span>
+            <span class="brand-toggle-optional">(optional)</span>
+            <span class="brand-toggle-chevron">▾</span>
+          </button>
+          <button id="btn-brand-clear" class="btn-brand-clear hidden" title="Clear brand colours">✕ Clear</button>
+        </div>
+        <div id="brand-panel" class="brand-panel hidden">
+          <div id="brand-presets" class="brand-presets"></div>
+          <label for="brand-colors-input" class="brand-panel-label">
+            Paste your brand colour palette below — the image generator will be instructed to use only these colours.
+          </label>
+          <textarea id="brand-colors-input" class="brand-colors-textarea" rows="5"
+            placeholder="Primary: Deep Navy #0B1F3B&#10;Secondary: Steel Blue #2E5E8C&#10;Accent: Teal #18A7A7&#10;CTA/Button: Teal #18A7A7 (hover: #128C8C)&#10;Background: Off-White #F6F8FB&#10;Neutrals: Charcoal #1F2933, Grey #8A98A8"></textarea>
+        </div>
+      </section>
+
+      <!-- Section 4: Refine Prompt -->
+      <section id="section-refine">
+        <div class="refine-actions">
+          <button id="btn-refine" class="btn-primary">Refine Prompt</button>
+          <button id="btn-quick-gen" class="btn-quick-gen">⚡ Quick Gen</button>
+        </div>
+        <div id="cost-estimate" class="cost-estimate hidden"></div>
+        <div id="refine-status" class="status-message hidden"></div>
+        <div id="quick-gen-status" class="status-message hidden"></div>
+        <div id="prompt-output-container" class="hidden">
+          <label for="refined-prompt">Refined Prompt (editable)</label>
+          <textarea id="refined-prompt" rows="8" placeholder="Your refined prompt will appear here..."></textarea>
+          <div class="prompt-actions">
+            <button id="btn-copy-prompt" class="btn-secondary">Copy Prompt</button>
+            <button id="btn-expand-prompt" class="btn-secondary">⤢ Expand</button>
+            <button id="btn-generate" class="btn-primary btn-generate-inline" disabled>Generate Image</button>
+            <span id="copy-confirm" class="copy-confirm hidden">Copied to clipboard</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 6: Active Queue -->
+      <section id="section-queue" class="hidden">
+        <h2>Active Generations</h2>
+        <div id="queue-list"></div>
+      </section>
+
+      <!-- Section 7: History -->
+      <section id="section-history" class="hidden">
+        <h2>History</h2>
+        <div id="history-grid" class="history-grid"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       TAB: Reverse Engineer
+  ═══════════════════════════════════════ -->
+  <div id="tab-reverse" class="tab-panel">
+    <main class="re-main">
+
+      <div class="re-intro">
+        <h2 class="re-title">Reverse Engineer an Infographic</h2>
+        <p class="re-subtitle">Upload any infographic image. The AI will analyse it and produce two prompts: one to
+          faithfully recreate the original, and one content-stripped template you can customise for your own work.</p>
+      </div>
+
+      <!-- Upload Zone -->
+      <section class="re-section">
+        <div id="re-drop-zone" class="drop-zone">
+          <input type="file" id="re-file-input" accept="image/png,image/jpeg,image/webp,image/gif" />
+          <div class="drop-zone-inner">
+            <div class="drop-zone-icon">📤</div>
+            <p class="drop-zone-text">Drop an image here or <span class="drop-zone-link">browse files</span></p>
+            <p class="drop-zone-hint">PNG · JPG · WEBP · Max 10 MB</p>
+          </div>
+        </div>
+        <!-- Preview (shown after upload) -->
+        <div id="re-preview" class="re-preview hidden">
+          <img id="re-preview-img" alt="Uploaded image preview" />
+          <button id="re-change-img" class="btn-secondary">↩ Change Image</button>
+        </div>
+      </section>
+
+      <!-- Analyse button -->
+      <div class="re-actions">
+        <button id="btn-analyse" class="btn-primary" disabled>🔍 Analyse Image</button>
+        <div id="re-status" class="status-message hidden"></div>
+      </div>
+
+      <!-- Output 1: Exact Prompt -->
+      <section class="re-output hidden" id="re-output-exact">
+        <div class="re-output-header">
+          <div>
+            <label class="re-output-label">Exact Recreation Prompt</label>
+            <p class="re-output-desc">Faithfully recreates the original — all content, layout, and style preserved</p>
+          </div>
+          <button class="btn-export-md" data-target="re-exact-textarea" data-name="exact-prompt">⬇ Export .md</button>
+        </div>
+        <textarea id="re-exact-textarea" class="re-textarea" rows="12"
+          placeholder="Analysis will appear here..."></textarea>
+      </section>
+
+      <!-- Output 2: Template Prompt -->
+      <section class="re-output hidden" id="re-output-template">
+        <div class="re-output-header">
+          <div>
+            <label class="re-output-label">Template Prompt</label>
+            <p class="re-output-desc">Same layout and style — content replaced with [PLACEHOLDERS] you fill in</p>
+          </div>
+          <button class="btn-export-md" data-target="re-template-textarea" data-name="template-prompt">⬇ Export
+            .md</button>
+        </div>
+        <textarea id="re-template-textarea" class="re-textarea" rows="12"
+          placeholder="Template will appear here..."></textarea>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       TAB: Mockups
+  ═══════════════════════════════════════ -->
+  <div id="tab-mockups" class="tab-panel">
+    <main class="mockup-main">
+
+      <div class="re-intro">
+        <h2 class="re-title">Product Showcase Mockups</h2>
+        <p class="re-subtitle">Describe your product, choose a mockup type, and let AI generate the perfect image
+          prompt. Optionally upload a reference image or add brand colours.</p>
+      </div>
+
+      <!-- Step 1: Context Input -->
+      <section class="mockup-section">
+        <label for="mockup-context" class="mockup-label">Step 1 — Describe your product or content</label>
+        <textarea id="mockup-context" class="mockup-textarea"
+          rows="4">Create a mockup with the brand saying "Your Brand Here" as a default placemarker image. Include some impressive background image with a high contrast foreground text saying "Your Brand Here" with a Simple tagline saying "Your Tagline Goes Here".</textarea>
+      </section>
+
+      <!-- Step 2: Mockup Type Chips -->
+      <section class="mockup-section">
+        <label class="mockup-label">Step 2 — Choose one or more mockup types</label>
+        <p class="multi-select-hint" style="margin-top:-4px;">Select multiple types to use Quick Gen</p>
+        <div class="style-grid mockup-chips" id="mockup-chips">
+          <button class="style-card active" data-type="Laptop">
+            <span class="style-card-name">💻 Laptop</span>
+          </button>
+          <button class="style-card" data-type="3D Book">
+            <span class="style-card-name">📖 3D Book</span>
+          </button>
+          <button class="style-card" data-type="iMac / Desktop Monitor">
+            <span class="style-card-name">🖥 iMac</span>
+          </button>
+          <button class="style-card" data-type="Twin Monitors">
+            <span class="style-card-name">🖥🖥 Twin Monitors</span>
+          </button>
+          <button class="style-card" data-type="iPad / Tablet">
+            <span class="style-card-name">📱 Tablet</span>
+          </button>
+          <button class="style-card" data-type="Paperback Book">
+            <span class="style-card-name">📚 Paperback</span>
+          </button>
+          <button class="style-card" data-type="Responsive Device Combo">
+            <span class="style-card-name">📱💻 Responsive Combo</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 3: Optional Reference Image -->
+      <section class="mockup-section">
+        <label class="mockup-label">Step 3 — Reference image <span class="mockup-optional">(optional)</span></label>
+        <div id="mockup-drop-zone" class="drop-zone mockup-drop-zone">
+          <input type="file" id="mockup-file-input" accept="image/png,image/jpeg,image/webp" />
+          <div class="drop-zone-inner">
+            <div class="drop-zone-icon">📎</div>
+            <p class="drop-zone-text">Drop a reference image or <span class="drop-zone-link">browse</span></p>
+            <p class="drop-zone-hint">PNG · JPG · WEBP · Max 10 MB</p>
+          </div>
+        </div>
+        <div id="mockup-preview" class="re-preview hidden">
+          <img id="mockup-preview-img" alt="Reference image preview" />
+          <button id="mockup-change-img" class="btn-secondary">↩ Remove Image</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Refine Prompt -->
+      <section class="mockup-section">
+        <div class="refine-actions">
+          <button id="btn-mockup-refine" class="btn-primary">✨ Refine Prompt</button>
+          <button id="btn-mockup-quick-gen" class="btn-quick-gen hidden">⚡ Quick Gen</button>
+        </div>
+        <div id="mockup-refine-status" class="status-message hidden"></div>
+        <div id="mockup-prompt-output" class="hidden">
+          <label for="mockup-refined-prompt" class="mockup-label" style="margin-top:16px;">Refined Prompt
+            (editable)</label>
+          <textarea id="mockup-refined-prompt" class="re-textarea" rows="8"
+            placeholder="Your mockup prompt will appear here..."></textarea>
+          <div class="prompt-actions">
+            <button id="btn-mockup-copy" class="btn-secondary">Copy Prompt</button>
+            <span id="mockup-copy-confirm" class="copy-confirm hidden">Copied!</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 5: Settings + Generate -->
+      <section class="mockup-section">
+        <label class="mockup-label">Step 5 — Settings &amp; Generate</label>
+        <div class="settings-row">
+          <div class="setting-group">
+            <label>Aspect Ratio</label>
+            <div class="toggle-group" id="mockup-ratio-toggle">
+              <button class="toggle-btn active" data-value="1:1">1:1</button>
+              <button class="toggle-btn" data-value="16:9">16:9</button>
+              <button class="toggle-btn" data-value="9:16">9:16</button>
+              <button class="toggle-btn" data-value="4:3">4:3</button>
+              <button class="toggle-btn" data-value="3:4">3:4</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>Resolution</label>
+            <div class="toggle-group" id="mockup-resolution-toggle">
+              <button class="toggle-btn active" data-value="1K">1K</button>
+              <button class="toggle-btn" data-value="2K">2K</button>
+              <button class="toggle-btn" data-value="4K">4K</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>Iterations</label>
+            <div class="toggle-group" id="mockup-iterations-toggle">
+              <button class="toggle-btn active" data-value="1">1</button>
+              <button class="toggle-btn" data-value="2">2</button>
+              <button class="toggle-btn" data-value="3">3</button>
+              <button class="toggle-btn" data-value="4">4</button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>Format</label>
+            <div class="toggle-group" id="mockup-format-toggle">
+              <button class="toggle-btn active" data-value="png">PNG</button>
+              <button class="toggle-btn" data-value="jpg">JPG</button>
+            </div>
+          </div>
+        </div>
+        <div id="mockup-cost-row" class="cost-estimate hidden"></div>
+        <button id="btn-mockup-generate" class="btn-primary" style="margin-top:16px;" disabled>🚀 Generate
+          Mockup</button>
+        <div id="mockup-gen-status" class="status-message hidden"></div>
+      </section>
+
+      <!-- Active Generations (mockup-specific) -->
+      <section id="mockup-section-queue" class="mockup-section hidden">
+        <h2 class="mockup-results-heading">Active Generations</h2>
+        <div id="mockup-queue-list"></div>
+      </section>
+
+      <!-- Results Grid (mockup-specific) -->
+      <section id="mockup-section-results" class="mockup-section hidden">
+        <h2 class="mockup-results-heading">Results</h2>
+        <div id="mockup-results-grid" class="history-grid"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       Global Fullscreen Image Modal
+  ═══════════════════════════════════════ -->
+  <div id="image-modal" class="image-modal hidden" role="dialog" aria-modal="true">
+    <div class="image-modal-backdrop" id="image-modal-backdrop"></div>
+    <div class="image-modal-content">
+      <img id="image-modal-img" src="" alt="Generated image" class="image-modal-img" />
+      <div class="image-modal-actions">
+        <button id="image-modal-download" class="btn-primary image-modal-btn">↓ Download</button>
+        <button id="image-modal-close" class="btn-secondary image-modal-btn">✕ Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="circuit.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

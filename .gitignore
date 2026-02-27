@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Environment variables (API keys etc. — never commit these)
+.env
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
