@@ -483,6 +483,32 @@ textarea:focus {
   filter: none;
 }
 
+.btn-direct-prompt {
+  background: transparent;
+  border: 1.5px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted, var(--color-muted));
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 13px 22px;
+  transition: border-color var(--transition), color var(--transition);
+  letter-spacing: 0.01em;
+}
+
+.btn-direct-prompt:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.history-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 /* Generate button lives inside the prompt-actions flex row */
 .btn-generate-inline {
   align-self: auto;
@@ -1305,8 +1331,15 @@ textarea:focus {
 }
 
 @keyframes modal-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .image-modal-img {
@@ -1315,7 +1348,7 @@ textarea:focus {
   width: auto;
   height: auto;
   border-radius: 10px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
   display: block;
   cursor: default;
 }
@@ -1324,6 +1357,22 @@ textarea:focus {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+/* Rate limit notice banner */
+.rate-limit-notice {
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  border-radius: var(--radius-sm);
+  color: #d4a017;
+  font-size: 12px;
+  padding: 9px 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.rate-limit-notice strong {
+  color: #f0bf30;
 }
 
 .image-modal-btn {

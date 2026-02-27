@@ -36,6 +36,12 @@
   <div id="tab-creation" class="tab-panel active">
     <main>
 
+      <!-- Rate limit notice -->
+      <div class="rate-limit-notice">
+        ⚡ <strong>30 image generations per hour</strong> per user &nbsp;·&nbsp; Resets automatically each hour
+        &nbsp;·&nbsp; Restart the server to reset immediately
+      </div>
+
       <!-- Section 1: Brief Input -->
       <section id="section-brief">
         <label for="topic-input">What is your infographic about?</label>
@@ -145,6 +151,7 @@
         <div class="refine-actions">
           <button id="btn-refine" class="btn-primary">Refine Prompt</button>
           <button id="btn-quick-gen" class="btn-quick-gen">⚡ Quick Gen</button>
+          <button id="btn-direct-prompt" class="btn-direct-prompt">✏ Direct Prompt</button>
         </div>
         <div id="cost-estimate" class="cost-estimate hidden"></div>
         <div id="refine-status" class="status-message hidden"></div>
@@ -155,6 +162,7 @@
           <div class="prompt-actions">
             <button id="btn-copy-prompt" class="btn-secondary">Copy Prompt</button>
             <button id="btn-expand-prompt" class="btn-secondary">⤢ Expand</button>
+            <button id="btn-export-prompt" class="btn-secondary">⬇ Export .md</button>
             <button id="btn-generate" class="btn-primary btn-generate-inline" disabled>Generate Image</button>
             <span id="copy-confirm" class="copy-confirm hidden">Copied to clipboard</span>
           </div>

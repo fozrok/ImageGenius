@@ -384,6 +384,7 @@ const btnExpandPrompt = document.getElementById('btn-expand-prompt');
 const copyConfirm = document.getElementById('copy-confirm');
 const btnGenerate = document.getElementById('btn-generate');
 const btnQuickGen = document.getElementById('btn-quick-gen');
+const btnDirectPrompt = document.getElementById('btn-direct-prompt');
 const quickGenStatus = document.getElementById('quick-gen-status');
 const costEstimateEl = document.getElementById('cost-estimate');
 const sectionQueue = document.getElementById('section-queue');
@@ -485,6 +486,8 @@ function renderHistory() {
             <p class="history-card-meta">${task.style ? task.style.name : '—'} · ${task.resolution} · ${task.ratio}</p>
             <div class="history-card-actions">
               <button class="btn-secondary" style="font-size:12px; padding:6px 14px;" data-download-task-id="${task.id}">↓ Download</button>
+              <button class="btn-secondary" style="font-size:12px; padding:6px 14px;" data-regen-task-id="${task.id}">↺ Regenerate</button>
+              <button class="btn-secondary" style="font-size:12px; padding:6px 14px;" data-load-task-id="${task.id}">✏ Load into Editor</button>
             </div>
           </div>
         </div>
@@ -508,6 +511,44 @@ function renderHistory() {
         btn.addEventListener('click', () => {
             const task = tasks.find(t => t.id === btn.dataset.downloadTaskId);
             if (task && task.imageUrl) downloadTask(task);
+        });
+    });
+
+    // Regenerate — re-submit same prompt + style directly
+    historyGrid.querySelectorAll('[data-regen-task-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const task = tasks.find(t => t.id === btn.dataset.regenTaskId);
+            if (!task) return;
+            submitTask(task.prompt, task.style);
+            sectionQueue.classList.remove('hidden');
+            sectionQueue.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Load into Editor — populate prompt textarea for editing
+    historyGrid.querySelectorAll('[data-load-task-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const task = tasks.find(t => t.id === btn.dataset.loadTaskId);
+            if (!task) return;
+            // Pre-fill topic if available
+            if (task.rawTopic && topicInput) topicInput.value = task.rawTopic;
+            // Re-select the style card if possible
+            if (task.style) {
+                document.querySelectorAll('.style-card').forEach(c => c.classList.remove('selected'));
+                const card = document.querySelector(`.style-card[data-style-id="${task.style.id}"]`);
+                if (card) {
+                    card.classList.add('selected');
+                    selectedStyles = [task.style];
+                }
+            }
+            // Load prompt into editor
+            refinedPrompt.value = task.prompt;
+            refinedPrompt.style.height = 'auto';
+            refinedPrompt.style.height = refinedPrompt.scrollHeight + 'px';
+            promptOutputContainer.classList.remove('hidden');
+            updateButtonStates();
+            // Scroll to refine section
+            document.getElementById('section-refine').scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
 
@@ -597,6 +638,7 @@ async function submitTask(prompt, taskStyle) {
     const task = {
         id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         prompt,
+        rawTopic: topicInput ? topicInput.value.trim() : '',
         style: taskStyle,
         resolution: selectedResolution,
         ratio: selectedRatio,
@@ -839,6 +881,51 @@ btnCopyPrompt.addEventListener('click', async () => {
 });
 
 /* ─────────────────────────────────────────────
+   Export Prompt as .md
+───────────────────────────────────────────── */
+const btnExportPrompt = document.getElementById('btn-export-prompt');
+btnExportPrompt.addEventListener('click', () => {
+    const text = refinedPrompt.value.trim();
+    if (!text) return;
+
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timePart = now.toTimeString().slice(0, 5).replace(':', '');
+
+    // Build a slug from style name (falls back to 'prompt')
+    const stylePart = selectedStyles.length > 0
+        ? selectedStyles[0].id.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+        : 'prompt';
+
+    // Build a short slug from the topic (first 4 words, max 40 chars)
+    const topicSlug = (topicInput.value.trim() || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .split(/\s+/)
+        .slice(0, 4)
+        .join('-')
+        .slice(0, 40) || 'infographic';
+
+    const filename = `${datePart}_${timePart}_${stylePart}_${topicSlug}.md`;
+
+    // Format as a tidy .md file with a title and the prompt body
+    const styleTitle = selectedStyles.length > 0 ? selectedStyles[0].name : 'Infographic';
+    const topicTitle = topicInput.value.trim() || 'Infographic';
+    const mdContent = `# ${styleTitle} — ${topicTitle}\n\n> Generated: ${now.toLocaleString()}\n\n---\n\n${text}\n`;
+
+    const blob = new Blob([mdContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+});
+
+/* ─────────────────────────────────────────────
    Expand / Collapse Prompt Button
 ───────────────────────────────────────────── */
 btnExpandPrompt.addEventListener('click', () => {
@@ -960,6 +1047,28 @@ btnQuickGen.addEventListener('click', async () => {
     }
 });
 
+/* ─────────────────────────────────────────────
+   Direct Prompt Button
+───────────────────────────────────────────── */
+btnDirectPrompt.addEventListener('click', () => {
+    const topic = topicInput.value.trim();
+    if (selectedStyles.length === 0) {
+        alert('Please select at least one art style before using Direct Prompt.');
+        return;
+    }
+    // Clear and reveal the prompt textarea immediately — no AI call
+    refinedPrompt.value = '';
+    refinedPrompt.style.height = '';
+    promptOutputContainer.classList.remove('hidden');
+    refineStatus.classList.add('hidden');
+    quickGenStatus.classList.add('hidden');
+    updateButtonStates();
+    // Focus so the user can start typing straight away
+    setTimeout(() => {
+        refinedPrompt.focus();
+        refinedPrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+});
 
 /* ─────────────────────────────────────────────
    Brand Colours Panel — Toggle, Presets, Clear

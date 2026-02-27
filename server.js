@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -12,6 +13,26 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Rate limiters ─────────────────────────────────────────────────────────
+// 30 image generations per IP per hour
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,   // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit reached — maximum 30 image generations per hour. Try again later or restart the server to reset.' }
+});
+
+// 120 prompt refinements per IP per hour (cheap, generous limit)
+const refineLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit reached — maximum 120 prompt refinements per hour. Try again later.' }
+});
+// ──────────────────────────────────────────────────────────────────────────
+
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(join(__dirname, 'public')));
@@ -22,7 +43,7 @@ app.get('/', (req, res) => {
 });
 
 // POST /refine-prompt - OpenRouter API call
-app.post('/refine-prompt', async (req, res) => {
+app.post('/refine-prompt', refineLimiter, async (req, res) => {
   const { topic, style, density, referenceImageBase64, mimeType, brandColors } = req.body;
 
   if (!topic || !style) {
@@ -139,7 +160,7 @@ Using your structured content from Phase 1, construct a single detailed image ge
 
 
 // POST /generate-image - kie.ai createTask
-app.post('/generate-image', async (req, res) => {
+app.post('/generate-image', generateLimiter, async (req, res) => {
   const { prompt, resolution, aspectRatio, outputFormat } = req.body;
 
   if (!prompt) {

@@ -834,3 +834,23 @@ Include the following in `README.md`:
 - The download route must stream the image from the CDN URL, not redirect to it
 - Textareas must auto-expand on content input using the scrollHeight technique
 - The Generate button must remain disabled until a refined prompt exists in the textarea
+
+---
+
+## 11. Feature Backlog
+
+Items approved for future development, in no particular priority order.
+
+### Generation & Workflow
+- [ ] **Prompt iteration** — after a result is generated, surface "Regenerate with variation" and "Refine this further" buttons on each history card so users can iterate without starting from scratch
+- [ ] **Direct prompt mode** — a "Skip refinement / use raw prompt" toggle for power users who want to paste their own prompt directly into the generator without going through the OpenRouter refinement step
+
+### History & Persistence
+- [ ] **Persistent history** — migrate task history from `localStorage` to a lightweight server-side store (SQLite via `better-sqlite3` or a flat JSON file) so history survives browser clears and tab resets
+- [ ] **Prompt history** — store the original topic, selected style(s), density, aspect ratio, and settings alongside each generated image so users can revisit, tweak, and regenerate from any past entry
+
+### Mockups Tab
+- [ ] **Batch generate all 7 mockup types** — a single "Generate All" button that refines and queues all 7 mockup templates simultaneously from one content description
+
+### Security & Infrastructure
+- [ ] **Rate limiting** — add per-IP rate limits on `/generate-image` and `/refine-prompt` routes (e.g. via `express-rate-limit`) to prevent unintended API credit drain
