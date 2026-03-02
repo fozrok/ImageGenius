@@ -369,9 +369,70 @@ function applyBrandColors(prompt) {
     const el = document.getElementById('brand-colors-input');
     const colours = el ? el.value.trim() : '';
     if (!colours) return prompt;
+    // Don't double-append if the directive is already in the prompt (baked in at refine time)
+    if (prompt.includes('Brand colour directive:')) return prompt;
     return prompt +
         `\n\nBrand colour directive: Use ONLY the following brand colours throughout the entire infographic. Do not introduce any colours that are not listed here. Replicate this palette faithfully:\n${colours}`;
 }
+
+/* ─────────────────────────────────────────────
+   Model Toggle (shared across all tabs)
+   State persisted to localStorage so the
+   chosen model survives page reloads.
+───────────────────────────────────────────── */
+const MODEL_V2 = 'nano-banana-2';
+const MODEL_V1 = 'nano-banana-pro';
+
+function getSelectedModel() {
+    return localStorage.getItem('kieModel') || MODEL_V2;
+}
+
+function setSelectedModel(model) {
+    localStorage.setItem('kieModel', model);
+}
+
+function updateModelToggles(model) {
+    const isV1 = model === MODEL_V1;
+    document.querySelectorAll('.model-toggle').forEach(btn => {
+        btn.textContent = `⚡ ${model}`;
+        btn.classList.toggle('model-v1', isV1);
+    });
+    // Also sync in thumbnail-tab if it exposes a setter
+    if (typeof window.onModelChanged === 'function') window.onModelChanged(model);
+}
+
+function initModelToggles() {
+    // Restore persisted model on load
+    updateModelToggles(getSelectedModel());
+
+    document.addEventListener('click', e => {
+        if (!e.target.matches('.model-toggle')) return;
+        const current = getSelectedModel();
+        const next = current === MODEL_V2 ? MODEL_V1 : MODEL_V2;
+        setSelectedModel(next);
+        updateModelToggles(next);
+    });
+}
+
+// Initialise after DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    initModelToggles();
+
+    // Populate the Visual Strategy LLM badge from server config
+    const llmBadge = document.getElementById('strategy-llm-badge');
+    if (llmBadge) {
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(cfg => {
+                const full = cfg.visualStrategyModel || cfg.llmModel || 'gemini-3.1-pro-preview';
+                const name = full.split('/').pop();
+                llmBadge.textContent = `🤖 ${name}`;
+                llmBadge.title = `Visual Strategy LLM: ${full}`;
+            })
+            .catch(() => { llmBadge.textContent = '🤖 LLM'; });
+
+    }
+});
 
 
 /* ─────────────────────────────────────────────
@@ -678,9 +739,11 @@ async function submitTask(prompt, taskStyle) {
                 prompt: task.prompt,
                 resolution: task.resolution,
                 aspectRatio: task.ratio,
-                outputFormat: task.format
+                outputFormat: task.format,
+                model: getSelectedModel()
             })
         });
+
 
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Failed to start task');
@@ -862,9 +925,13 @@ btnRefine.addEventListener('click', async () => {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Failed to refine prompt');
 
-        refinedPrompt.value = data.prompt;
+        // Bake the brand hex directive into the visible prompt so user can see exactly
+        // what will be sent to the image generator. applyBrandColors() at generate-time
+        // will skip re-appending since the section is already present.
+        refinedPrompt.value = applyBrandColors(data.prompt);
         refinedPrompt.style.height = 'auto';
         refinedPrompt.style.height = refinedPrompt.scrollHeight + 'px';
+
 
         promptOutputContainer.classList.remove('hidden');
         refineStatus.classList.add('hidden');
@@ -968,9 +1035,13 @@ btnGenerate.addEventListener('click', () => {
         return;
     }
 
+    // Read selected iterations (default 1)
+    const iterBtn = document.querySelector('#creation-iterations-toggle .toggle-btn.active');
+    const iterations = iterBtn ? parseInt(iterBtn.dataset.value, 10) : 1;
+
     // Brief confirmation in the button text
     const originalText = btnGenerate.textContent;
-    btnGenerate.textContent = '+ Added to queue';
+    btnGenerate.textContent = `+ Added ${iterations > 1 ? iterations + 'x ' : ''}to queue`;
     btnGenerate.disabled = true;
 
     setTimeout(() => {
@@ -978,8 +1049,12 @@ btnGenerate.addEventListener('click', () => {
         updateButtonStates();
     }, 1200);
 
-    submitTask(applyBrandColors(applyDensity(prompt)), selectedStyles[0]);
+    const finalPrompt = applyBrandColors(applyDensity(prompt));
+    for (let i = 0; i < iterations; i++) {
+        setTimeout(() => submitTask(finalPrompt, selectedStyles[0]), i * 200);
+    }
 });
+
 
 /* ─────────────────────────────────────────────
    Quick Gen Button
@@ -1260,7 +1335,589 @@ function initTabs() {
 }
 
 /* ─────────────────────────────────────────────
+   Visual Strategy Feature
+───────────────────────────────────────────── */
+(function setupVisualStrategy() {
+    const btnAnalyse = document.getElementById('btn-analyse-content');
+    const copyInput = document.getElementById('strategy-copy-input');
+    const statusEl = document.getElementById('strategy-status');
+    const resultsEl = document.getElementById('strategy-results');
+    const cardsGrid = document.getElementById('strategy-cards');
+    const vstyleButtons = document.querySelectorAll('.vstyle-btn');
+
+    if (!btnAnalyse) return;
+
+    // ── Visual style selection ────────────────────────────────────────────
+    let selectedVStyle = 'infographic'; // matches the default active button
+
+    vstyleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            vstyleButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedVStyle = btn.dataset.vstyle;
+        });
+    });
+
+    // Visual type → badge colour (CSS variable-friendly palette)
+    const TYPE_META = {
+        process_steps: { bg: '#4c1d95', color: '#c4b5fd', icon: '🔢' },
+        comparison: { bg: '#1e3a5f', color: '#93c5fd', icon: '⚖️' },
+        statistics: { bg: '#14532d', color: '#86efac', icon: '📊' },
+        timeline: { bg: '#7c2d12', color: '#fca5a1', icon: '📅' },
+        benefit_list: { bg: '#1c4532', color: '#6ee7b7', icon: '✅' },
+        hierarchy: { bg: '#312e81', color: '#a5b4fc', icon: '🏔' },
+        cycle: { bg: '#064e3b', color: '#6ee7b7', icon: '🔄' },
+        quote_graphic: { bg: '#4a1d96', color: '#ddd6fe', icon: '💬' },
+    };
+
+    function setStatus(msg, isError = false) {
+        statusEl.textContent = msg;
+        statusEl.classList.toggle('error', isError);
+        statusEl.classList.toggle('hidden', !msg);
+    }
+
+    // Intelligence summary panel — injected before the cards grid
+    let intelligencePanel = null;
+
+    function renderIntelligence(ci) {
+        // Remove previous panel if re-running
+        if (intelligencePanel) intelligencePanel.remove();
+
+        const fwHtml = (ci.frameworks || []).map(f => `
+            <div class="ci-framework">
+                <strong>${escapeHtml(f.name)}</strong> — ${escapeHtml(f.description || '')}
+                ${(f.steps && f.steps.length) ? `<ol class="ci-steps">${f.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>` : ''}
+            </div>`).join('');
+
+        const listHtml = (arr, cls) => (arr || []).map(i => `<li class="${cls}">${escapeHtml(i)}</li>`).join('');
+
+        intelligencePanel = document.createElement('div');
+        intelligencePanel.className = 'ci-panel';
+        intelligencePanel.innerHTML = `
+            <div class="ci-panel-header">
+                <span class="ci-panel-title">📋 Content Intelligence</span>
+                <span class="ci-panel-meta">${escapeHtml(ci.tone || '')} · ${escapeHtml(ci.target_audience || '')}</span>
+            </div>
+            ${(ci.brand_name || ci.offer_name) ? `<div class="ci-identity">
+                ${ci.brand_name ? `<span class="ci-identity-tag">🏷 Brand: <strong>${escapeHtml(ci.brand_name)}</strong></span>` : ''}
+                ${ci.offer_name ? `<span class="ci-identity-tag">📦 Offer: <strong>${escapeHtml(ci.offer_name)}</strong></span>` : ''}
+            </div>` : ''}
+            <p class="ci-core-message">"${escapeHtml(ci.core_message || '')}"</p>
+            <div class="ci-grid">
+                ${fwHtml ? `<div class="ci-col"><h4 class="ci-col-label">Frameworks</h4>${fwHtml}</div>` : ''}
+                ${(ci.key_messages || []).length ? `<div class="ci-col"><h4 class="ci-col-label">Key Messages</h4><ul class="ci-list">${listHtml(ci.key_messages, 'ci-msg')}</ul></div>` : ''}
+                ${(ci.standout_insights || []).length ? `<div class="ci-col"><h4 class="ci-col-label">Standout Insights</h4><ul class="ci-list">${listHtml(ci.standout_insights, 'ci-insight')}</ul></div>` : ''}
+            </div>`;
+
+
+        // Insert before the cards grid inside resultsEl
+        resultsEl.insertBefore(intelligencePanel, cardsGrid);
+    }
+
+    function renderCards(recommendations, ci = {}) {
+        cardsGrid.innerHTML = '';
+
+        // ── Toolbar: Export All + Quick Gen (inserted before cards) ──────────
+        let toolbar = resultsEl.querySelector('#qg-toolbar');
+        if (!toolbar) {
+            toolbar = document.createElement('div');
+            toolbar.id = 'qg-toolbar';
+            toolbar.className = 'qg-toolbar';
+            resultsEl.insertBefore(toolbar, cardsGrid);
+        }
+        toolbar.innerHTML = ''; // reset on re-run
+
+        const exportAllBtn = document.createElement('button');
+        exportAllBtn.id = 'btn-export-all-prompts';
+        exportAllBtn.className = 'btn-secondary';
+        exportAllBtn.textContent = '⬇ Export All Prompts';
+        toolbar.appendChild(exportAllBtn);
+
+        const quickGenBtn = document.createElement('button');
+        quickGenBtn.id = 'btn-quick-gen';
+        quickGenBtn.className = 'btn-quick-gen';
+        quickGenBtn.textContent = '⚡ Quick Gen';
+        quickGenBtn.disabled = true;
+        toolbar.appendChild(quickGenBtn);
+
+        // Each card stores its live prompt so refinements accumulate
+        const livePrompts = recommendations.map(r => r.infographicPrompt || '');
+
+        // Approved set
+        const approvedSet = new Set();
+        const updateQuickGenBtn = () => {
+            const n = approvedSet.size;
+            quickGenBtn.textContent = n > 0 ? `⚡ Quick Gen (${n} Approved)` : '⚡ Quick Gen';
+            quickGenBtn.disabled = n === 0;
+            quickGenBtn.classList.toggle('has-approved', n > 0);
+        };
+
+        recommendations.forEach((rec, idx) => {
+            const meta = TYPE_META[rec.visualType] || { bg: '#1f2937', color: '#e5e7eb', icon: '🖼' };
+            const card = document.createElement('div');
+            card.className = 'strategy-card';
+            card.dataset.idx = idx;
+            card.innerHTML = `
+                <div class="strategy-card-top">
+                    <span class="strategy-type-badge" style="background:${meta.bg};color:${meta.color}">
+                        ${meta.icon} ${rec.visualTypeLabel || rec.visualType}
+                    </span>
+                    <span class="strategy-section-label">${escapeHtml(rec.section || '')}</span>
+                </div>
+                <h3 class="strategy-headline">${escapeHtml(rec.headline || '')}</h3>
+                <p class="strategy-rationale">${escapeHtml(rec.rationale || '')}</p>
+                ${rec.sourceExcerpt ? `<blockquote class="strategy-excerpt">"${escapeHtml(rec.sourceExcerpt)}"</blockquote>` : ''}
+
+                <!-- Expandable prompt panel -->
+                <div class="card-prompt-panel hidden">
+                    <label class="card-prompt-label">Image Prompt</label>
+                    <textarea class="card-prompt-textarea" rows="5">${escapeHtml(livePrompts[idx])}</textarea>
+
+                    <!-- Inline brand name input (shown only when 🏷 button clicked) -->
+                    <div class="card-brand-row hidden">
+                        <input type="text" class="card-brand-input" placeholder="Brand or offer name…" />
+                        <button class="refine-btn card-brand-apply" data-prompt-action="brand-apply">Apply ✓</button>
+                        <button class="card-brand-cancel" data-prompt-action="brand-cancel">✕</button>
+                    </div>
+
+                    <div class="card-refine-row">
+                        <button class="refine-btn" data-prompt-action="brand-toggle">🏷 Include Brand Name</button>
+                        <button class="refine-btn" data-instruction="Add more visually specific and contextually relevant detail to make this image prompt richer and more descriptive" data-prompt-action="refine">＋ More Detail</button>
+                        <button class="refine-btn" data-instruction="Make this prompt more concise — cut redundancy, keep all key visual and compositional elements" data-prompt-action="refine">✂ More Concise</button>
+                        <button class="refine-btn refine-regen" data-instruction="Completely regenerate this image prompt for the same topic and visual type, with a fresh approach" data-prompt-action="refine">🔄 Re-generate</button>
+                        <button class="card-copy-btn" data-prompt-action="copy" title="Copy prompt to clipboard">📋 Copy</button>
+                    </div>
+                    <div class="card-refine-status"></div>
+
+                    <!-- Generation settings: shown in prompt panel -->
+                    <div class="card-gen-settings">
+                        <label class="cgs-label">Dimension</label>
+                        <select class="cgs-select card-ar-select">
+                            <option value="9:16" ${['process_steps', 'benefit_list', 'hierarchy', 'quote_graphic'].includes(rec.visualType) ? 'selected' : ''}>9:16 — Portrait</option>
+                            <option value="16:9" ${['comparison', 'timeline'].includes(rec.visualType) ? 'selected' : ''}>16:9 — Landscape</option>
+                            <option value="1:1"  ${['statistics', 'cycle'].includes(rec.visualType) ? 'selected' : ''}>1:1 — Square</option>
+                            <option value="4:5">4:5 — Social</option>
+                        </select>
+                        <label class="cgs-label">Resolution</label>
+                        <select class="cgs-select card-res-select">
+                            <option value="1K">1K</option>
+                            <option value="2K" selected>2K</option>
+                            <option value="4K">4K</option>
+                        </select>
+                        <label class="cgs-label">Format</label>
+                        <select class="cgs-select card-fmt-select">
+                            <option value="jpg" selected>JPG</option>
+                            <option value="png">PNG</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="strategy-card-actions">
+                    <button class="btn-outline card-toggle-prompt" data-idx="${idx}">
+                        👁 View Prompt
+                    </button>
+                    <button class="btn-approve" data-prompt-action="approve" data-idx="${idx}" title="Approve this prompt for Quick Gen">
+                        ✓ Approve
+                    </button>
+                    <button class="btn-primary strategy-action-btn" data-idx="${idx}" data-action="creation">
+                        ✏️ Open in Creation
+                    </button>
+                    <button class="btn-secondary strategy-action-btn" data-idx="${idx}" data-action="mockups">
+                        🖼 Open in Mockups
+                    </button>
+                </div>`;
+            cardsGrid.appendChild(card);
+        });
+
+        // ── Event delegation for all card interactions ─────────────────────
+        cardsGrid.addEventListener('click', async e => {
+            // Open in Creation / Mockups
+            const actionBtn = e.target.closest('[data-action]');
+            if (actionBtn) {
+                const rec = recommendations[parseInt(actionBtn.dataset.idx, 10)];
+                // Use the live (possibly refined) prompt
+                const textarea = actionBtn.closest('.strategy-card')?.querySelector('.card-prompt-textarea');
+                const liveRec = { ...rec, infographicPrompt: textarea?.value || rec.infographicPrompt };
+                if (actionBtn.dataset.action === 'creation') sendToCreation(liveRec);
+                if (actionBtn.dataset.action === 'mockups') sendToMockups(liveRec);
+                return;
+            }
+
+            // Toggle prompt panel
+            const toggleBtn = e.target.closest('.card-toggle-prompt');
+            if (toggleBtn) {
+                const card = toggleBtn.closest('.strategy-card');
+                const panel = card.querySelector('.card-prompt-panel');
+                const isOpen = !panel.classList.contains('hidden');
+                panel.classList.toggle('hidden', isOpen);
+                toggleBtn.textContent = isOpen ? '👁 View Prompt' : '▲ Hide Prompt';
+                return;
+            }
+            // Brand name toggle — show inline input
+            const brandToggle = e.target.closest('[data-prompt-action="brand-toggle"]');
+            if (brandToggle) {
+                const panel = brandToggle.closest('.card-prompt-panel');
+                const brandRow = panel.querySelector('.card-brand-row');
+                const brandInput = brandRow.querySelector('.card-brand-input');
+                // Pre-fill with detected brand from Step 1
+                const detected = [ci.brand_name, ci.offer_name].filter(Boolean).join(' / ');
+                if (detected && !brandInput.value) brandInput.value = detected;
+                brandRow.classList.toggle('hidden');
+                if (!brandRow.classList.contains('hidden')) brandInput.focus();
+                return;
+            }
+
+            // Brand name cancel
+            const brandCancel = e.target.closest('[data-prompt-action="brand-cancel"]');
+            if (brandCancel) {
+                brandCancel.closest('.card-brand-row').classList.add('hidden');
+                return;
+            }
+
+            // Brand name apply — trigger refinement with the typed/pre-filled name
+            const brandApply = e.target.closest('[data-prompt-action="brand-apply"]');
+            if (brandApply) {
+                const panel = brandApply.closest('.card-prompt-panel');
+                const brandRow = panel.querySelector('.card-brand-row');
+                const name = brandRow.querySelector('.card-brand-input').value.trim();
+                if (!name) return;
+                brandRow.classList.add('hidden');
+                const ta = panel.querySelector('.card-prompt-textarea');
+                const statusEl = panel.querySelector('.card-refine-status');
+                const instruction = `Include the brand name "${name}" prominently in the visual design and typography. Weave it naturally into the title, headline, or a visual element without forcing it.`;
+                // Reuse the refine flow
+                panel.querySelectorAll('.refine-btn').forEach(b => b.disabled = true);
+                statusEl.textContent = '✦ Adding brand name…';
+                statusEl.className = 'card-refine-status active';
+                try {
+                    const res = await fetch('/refine-strategy-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ currentPrompt: ta.value, instruction })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || data.error) throw new Error(data.error);
+                    ta.value = data.refinedPrompt;
+                    const cardIdx = parseInt(brandApply.closest('.strategy-card').dataset.idx, 10);
+                    livePrompts[cardIdx] = data.refinedPrompt;
+                    statusEl.textContent = '✓ Brand name added';
+                    statusEl.className = 'card-refine-status done';
+                    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'card-refine-status'; }, 3000);
+                } catch (err) {
+                    statusEl.textContent = `Error: ${err.message}`;
+                    statusEl.className = 'card-refine-status error';
+                } finally {
+                    panel.querySelectorAll('.refine-btn').forEach(b => b.disabled = false);
+                }
+                return;
+            }
+
+            const copyBtn = e.target.closest('[data-prompt-action="copy"]');
+            if (copyBtn) {
+                const ta = copyBtn.closest('.card-prompt-panel').querySelector('.card-prompt-textarea');
+                await navigator.clipboard.writeText(ta.value).catch(() => { });
+                copyBtn.textContent = '✅ Copied!';
+                setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+                return;
+            }
+
+            // Refinement buttons
+            const refineBtn = e.target.closest('[data-prompt-action="refine"]');
+            if (refineBtn) {
+                const panel = refineBtn.closest('.card-prompt-panel');
+                const ta = panel.querySelector('.card-prompt-textarea');
+                const statusEl = panel.querySelector('.card-refine-status');
+                let instruction = refineBtn.dataset.instruction;
+
+                // For brand name, use extracted ci.brand_name first; fall back to prompt
+                if (instruction.includes('brand name')) {
+                    const detected = [ci.brand_name, ci.offer_name].filter(Boolean).join(' / ');
+                    const name = detected || window.prompt('Enter your brand or offer name:');
+                    if (!name) return;
+                    instruction = `Include the brand name "${name.trim()}" prominently in the visual design and typography`;
+                }
+
+                refineBtn.disabled = true;
+                statusEl.textContent = '✦ Refining…';
+                statusEl.className = 'card-refine-status active';
+
+                try {
+                    const res = await fetch('/refine-strategy-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ currentPrompt: ta.value, instruction })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || data.error) throw new Error(data.error);
+                    ta.value = data.refinedPrompt;
+                    // Update livePrompts so Export All uses the latest
+                    const cardIdx = parseInt(refineBtn.closest('.strategy-card').dataset.idx, 10);
+                    livePrompts[cardIdx] = data.refinedPrompt;
+                    statusEl.textContent = '✓ Updated';
+                    statusEl.className = 'card-refine-status done';
+                    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'card-refine-status'; }, 3000);
+                } catch (err) {
+                    statusEl.textContent = `Error: ${err.message}`;
+                    statusEl.className = 'card-refine-status error';
+                } finally {
+                    refineBtn.disabled = false;
+                }
+            }
+
+            // Approve toggle
+            const approveBtn = e.target.closest('[data-prompt-action="approve"]');
+            if (approveBtn) {
+                const idx = parseInt(approveBtn.dataset.idx, 10);
+                const card = approveBtn.closest('.strategy-card');
+                if (approvedSet.has(idx)) {
+                    approvedSet.delete(idx);
+                    card.classList.remove('approved');
+                    approveBtn.textContent = '✓ Approve';
+                    approveBtn.classList.remove('approved');
+                } else {
+                    approvedSet.add(idx);
+                    card.classList.add('approved');
+                    approveBtn.textContent = '✅ Approved';
+                    approveBtn.classList.add('approved');
+                }
+                updateQuickGenBtn();
+                return;
+            }
+        });
+
+        // ── Export All ─────────────────────────────────────────────────────
+        exportAllBtn.onclick = () => {
+            const lines = recommendations.map((rec, i) => {
+                // Always export the live (refined) textarea value if panel exists
+                const ta = cardsGrid.querySelector(`.strategy-card[data-idx="${i}"] .card-prompt-textarea`);
+                const prompt = ta ? ta.value : livePrompts[i];
+                return `## ${i + 1}. ${rec.headline || rec.section}\n**Type:** ${rec.visualTypeLabel || rec.visualType}\n**Rationale:** ${rec.rationale || ''}\n\n**Image Prompt:**\n${prompt}`;
+            }).join('\n\n---\n\n');
+
+            const md = `# Visual Strategy — Prompt Recommendations\n\n${lines}\n`;
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'visual-strategy-prompts.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // ── Quick Gen ──────────────────────────────────────────────────────
+        // Maps visualType → aspect ratio for kie.ai
+        const VTYPE_RATIO = {
+            process_steps: '9:16', comparison: '16:9', statistics: '1:1',
+            timeline: '16:9', benefit_list: '9:16', hierarchy: '9:16',
+            cycle: '1:1', quote_graphic: '9:16'
+        };
+
+        quickGenBtn.onclick = () => runQuickGen();
+
+        async function runQuickGen() {
+            if (approvedSet.size === 0) return;
+
+            // Gallery setup
+            let gallery = resultsEl.querySelector('#quick-gen-gallery');
+            if (!gallery) {
+                gallery = document.createElement('div');
+                gallery.id = 'quick-gen-gallery';
+                gallery.innerHTML = '<h3 class="qg-gallery-title">⚡ Quick Gen Results</h3><div class="qg-grid"></div>';
+                resultsEl.appendChild(gallery);
+            }
+            const qgGrid = gallery.querySelector('.qg-grid');
+            qgGrid.innerHTML = '';
+
+            // Create a placeholder card per approved prompt and kick off generation
+            const jobs = [];
+            for (const idx of approvedSet) {
+                const rec = recommendations[idx];
+                const cardEl = cardsGrid.querySelector(`.strategy-card[data-idx="${idx}"]`);
+                const ta = cardEl?.querySelector('.card-prompt-textarea');
+                const prompt = ta?.value || livePrompts[idx];
+                // Read per-card settings (with smart defaults)
+                const aspectRatio = cardEl?.querySelector('.card-ar-select')?.value || VTYPE_RATIO[rec.visualType] || '9:16';
+                const resolution = cardEl?.querySelector('.card-res-select')?.value || '2K';
+                const outputFormat = cardEl?.querySelector('.card-fmt-select')?.value || 'jpg';
+
+                // Placeholder card
+                const slot = document.createElement('div');
+                slot.className = 'qg-card loading';
+                slot.dataset.idx = idx;
+                slot.innerHTML = `
+                    <div class="qg-shimmer"></div>
+                    <div class="qg-card-meta">
+                        <span class="qg-label">${escapeHtml(rec.headline || rec.section)}</span>
+                        <span class="qg-status">Generating…</span>
+                    </div>`;
+                qgGrid.appendChild(slot);
+
+                jobs.push({ idx, rec, prompt, aspectRatio, resolution, outputFormat, slot });
+            }
+
+            gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Fire all generations in parallel
+            await Promise.allSettled(jobs.map(job => generateOne(job)));
+        }
+
+        async function generateOne({ rec, prompt, aspectRatio, resolution, outputFormat, slot }) {
+            const setStatus = (msg, err) => {
+                const s = slot.querySelector('.qg-status');
+                if (s) { s.textContent = msg; s.style.color = err ? '#f87171' : ''; }
+            };
+            try {
+                const res = await fetch('/generate-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, aspectRatio, resolution, outputFormat, model: 'nano-banana-2' })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+                await pollAndRender(data.taskId, rec, slot);
+            } catch (err) {
+                slot.classList.replace('loading', 'failed');
+                setStatus(`Error: ${err.message}`, true);
+            }
+        }
+
+        function pollAndRender(taskId, rec, slot) {
+            const MSGS = [
+                'Generating…', 'Composing layout…', 'Rendering details…',
+                'Applying colours…', 'Adding typography…', 'Almost there…'
+            ];
+            let msgIdx = 0;
+            const setStatus = (msg) => { const s = slot.querySelector('.qg-status'); if (s) s.textContent = msg; };
+
+            return new Promise((resolve, reject) => {
+                // Rotate status messages every 5s so user sees progress
+                const msgTimer = setInterval(() => {
+                    msgIdx = (msgIdx + 1) % MSGS.length;
+                    setStatus(MSGS[msgIdx]);
+                }, 5000);
+
+                // 3-minute hard timeout (same as Creation tab)
+                const hardTimeout = setTimeout(() => {
+                    clearInterval(msgTimer);
+                    clearInterval(iv);
+                    slot.classList.replace('loading', 'failed');
+                    setStatus('Timed out after 3 min — try Quick Gen again');
+                    reject(new Error('timeout'));
+                }, 180_000);
+
+                // Poll every 4s — matches Creation tab cadence
+                const iv = setInterval(async () => {
+                    try {
+                        const r = await fetch(`/task-status/${taskId}`);
+                        const data = await r.json();
+                        // /task-status normalises the KIE response to { state, imageUrl, failMsg }
+                        if (data.state === 'success') {
+                            clearInterval(iv); clearInterval(msgTimer); clearTimeout(hardTimeout);
+                            renderQgResult(slot, rec, data.imageUrl);
+                            resolve();
+                        } else if (data.state === 'fail') {
+                            clearInterval(iv); clearInterval(msgTimer); clearTimeout(hardTimeout);
+                            slot.classList.replace('loading', 'failed');
+                            setStatus(`Failed: ${data.failMsg || 'Unknown error'}`);
+                            reject(new Error(data.failMsg || 'failed'));
+                        }
+                        // 'waiting' → keep polling, message rotation handles UX
+                    } catch { /* network hiccup — keep polling */ }
+                }, 4000);
+            });
+        }
+
+
+        function renderQgResult(slot, rec, imgUrl, taskId) {
+            slot.className = 'qg-card ready';
+            slot.innerHTML = `
+                <img src="${imgUrl}" alt="${escapeHtml(rec.headline || '')}" class="qg-image" loading="lazy" />
+                <div class="qg-card-meta">
+                    <span class="qg-label">${escapeHtml(rec.headline || rec.section)}</span>
+                    <div class="qg-actions">
+                        <a href="/download?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent((rec.headline || 'image').replace(/\s+/g, '-'))}.png"
+                           download class="qg-action-btn">⬇ Download</a>
+                        <button class="qg-action-btn" onclick="window.open('${imgUrl}','_blank')">🔍 Full Size</button>
+                    </div>
+                </div>`;
+        }
+    }
+
+
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function sendToCreation(rec) {
+        // Pre-fill the topic textarea on the Creation tab
+        const topicEl = document.getElementById('topic-input');
+        if (topicEl) {
+            topicEl.value = rec.infographicPrompt || rec.headline || '';
+            topicEl.dispatchEvent(new Event('input'));
+        }
+        // Switch to Creation tab
+        const creationBtn = document.querySelector('.tab-btn[data-tab="creation"]');
+        if (creationBtn) creationBtn.click();
+
+        // Short delay then scroll to topic input
+        setTimeout(() => topicEl?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+    }
+
+    function sendToMockups(rec) {
+        // Pre-fill mockup context textarea
+        const mockupCtx = document.getElementById('mockup-context');
+        if (mockupCtx) {
+            mockupCtx.value = rec.infographicPrompt || rec.headline || '';
+            mockupCtx.dispatchEvent(new Event('input'));
+        }
+        // Switch to Mockups tab
+        const mockupBtn = document.querySelector('.tab-btn[data-tab="mockups"]');
+        if (mockupBtn) mockupBtn.click();
+    }
+
+    btnAnalyse.addEventListener('click', async () => {
+        const copy = copyInput.value.trim();
+        if (copy.length < 80) {
+            setStatus('Please paste at least a few sentences of website copy first.', true);
+            return;
+        }
+
+        btnAnalyse.textContent = 'Analysing…';
+        btnAnalyse.disabled = true;
+        resultsEl.classList.add('hidden');
+        setStatus('Auditing your content for visual opportunities…');
+
+        try {
+            const res = await fetch('/analyse-content', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ websiteCopy: copy, visualStyle: selectedVStyle })
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Failed to analyse content');
+
+            setStatus('');
+            if (data.contentIntelligence) renderIntelligence(data.contentIntelligence);
+            renderCards(data.recommendations || [], data.contentIntelligence || {});
+
+            resultsEl.classList.remove('hidden');
+            resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+
+        } catch (err) {
+            setStatus(`Error: ${err.message}`, true);
+        } finally {
+            btnAnalyse.textContent = '🧠 Analyse My Content';
+            btnAnalyse.disabled = false;
+        }
+    });
+})();
+
+/* ─────────────────────────────────────────────
    Reverse Engineer Feature
+
 ───────────────────────────────────────────── */
 function setupReverseEngineer() {
     const dropZone = document.getElementById('re-drop-zone');
@@ -1692,8 +2349,18 @@ function setupMockups() {
         fetch('/generate-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, aspectRatio: mockupRatio, resolution: mockupResolution, outputFormat: mockupFormat })
+            body: JSON.stringify({
+                prompt,
+                aspectRatio: mockupRatio,
+                resolution: mockupResolution,
+                outputFormat: mockupFormat,
+                model: getSelectedModel(),
+                referenceImageBase64: mockupImageBase64 || null,
+                referenceImageMime: mockupImageMime || null
+            })
         })
+
+
             .then(r => r.json())
             .then(data => {
                 if (data.error) throw new Error(data.error);

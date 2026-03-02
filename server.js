@@ -6,6 +6,16 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import HOOKS_LIBRARY from './hooks-library.js';
 
+// ── Prompt modules — edit these files to update any LLM system prompt ──────
+import CONTENT_INTELLIGENCE_PROMPT from './prompts/content-intelligence.js';
+import { buildVisualStrategistPrompt } from './prompts/visual-strategist.js';
+
+import { buildRefinePrompt } from './prompts/refine-infographic.js';
+import MOCKUP_SYSTEM_PROMPT from './prompts/mockup-templates.js';
+import REVERSE_ENGINEER_PROMPT from './prompts/reverse-engineer.js';
+import { buildThumbnailIdeaPrompt, THUMBNAIL_PROMPT_SYSTEM } from './prompts/thumbnail.js';
+
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,13 +53,169 @@ app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
+// ─── Content Sanitisation Helpers ───────────────────────────────────────────
+/**
+ * Removes duplicate sentences/phrases from raw pasted content.
+ * Pass 1: exact duplicates (case-insensitive, stripped of punctuation).
+ * Pass 2: near-duplicates where one sentence is ≥80% a substring of another.
+ */
+function deduplicateContent(text) {
+  if (!text || typeof text !== 'string') return text;
+  const sentences = text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const seen = [];
+  const result = [];
+  for (const sentence of sentences) {
+    const norm = sentence.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    if (!norm) continue;
+    if (seen.includes(norm)) continue;
+    const isDupe = seen.some(s => {
+      const longer = s.length >= norm.length ? s : norm;
+      const shorter = s.length < norm.length ? s : norm;
+      return longer.includes(shorter) && shorter.length / longer.length >= 0.8;
+    });
+    if (isDupe) continue;
+    seen.push(norm);
+    result.push(sentence);
+  }
+  return result.join(' ');
+}
+// ───────────────────────────────────────────────────────────────────────
+
+// GET /api/config — expose public config (model names) to the frontend
+app.get('/api/config', (req, res) => {
+  res.json({
+    llmModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet',
+    visionModel: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.0-flash-001',
+    visualStrategyModel: process.env.VISUAL_STRATEGY_MODEL || 'google/gemini-3-flash-preview',
+  });
+});
+
+// POST /analyse-content — Visual Strategy: analyse raw website copy → recommend visuals
+
+app.post('/analyse-content', refineLimiter, async (req, res) => {
+  const { websiteCopy, visualStyle } = req.body;
+  if (!websiteCopy || websiteCopy.trim().length < 80) {
+    return res.status(400).json({ error: 'Please paste at least a few sentences of website copy.' });
+  }
+
+  const model = process.env.VISUAL_STRATEGY_MODEL || 'google/gemini-3-flash-preview';
+
+  const rawCopy = websiteCopy.trim();
+
+  // Helper: call OpenRouter with a 45s timeout and return the text content
+  async function callLLM(systemPrompt, userMessage, maxTokens = 2000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
+    let r;
+    try {
+      r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }], max_tokens: maxTokens })
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('AI request timed out after 45 seconds. Try again or use a shorter input.');
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!r.ok) { const e = await r.text(); throw new Error(`OpenRouter error (${r.status}): ${e.slice(0, 200)}`); }
+    const d = await r.json();
+    const text = d.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error('Empty response from AI');
+    return text;
+  }
+
+  // Helper: robustly extract and parse the first valid JSON object or array
+  // Handles: markdown fences anywhere, prose preamble, trailing prose, escaped newlines
+  function parseJSON(raw, shape = 'object') {
+    // Pass 1: strip all markdown code fences (```json ... ``` or ``` ... ```)
+    let s = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+
+    // Pass 2: extract the outermost bracket block that matches the expected shape
+    const open = shape === 'array' ? '[' : '{';
+    const close = shape === 'array' ? ']' : '}';
+    let start = -1, depth = 0, end = -1;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === open) { if (depth === 0) start = i; depth++; }
+      if (s[i] === close) { depth--; if (depth === 0 && start !== -1) { end = i; break; } }
+    }
+    if (start !== -1 && end !== -1) s = s.slice(start, end + 1);
+
+    // Pass 3: attempt parse; if it fails try escaping bare newlines inside strings
+    try { return JSON.parse(s); } catch (_) { }
+    try { return JSON.parse(s.replace(/(?<!\\)\n/g, '\\n')); } catch (e) {
+      console.error('[parseJSON] Failed. Raw snippet:', raw.slice(0, 400));
+      throw new Error(`JSON parse failed: ${e.message}`);
+    }
+  }
+
+
+  try {
+    // ── STEP 1: Content Intelligence Extraction ─────────────────────────────
+    console.log('[analyse-content] Step 1: extracting content intelligence…');
+
+    const step1System = CONTENT_INTELLIGENCE_PROMPT;
+
+    const step1Raw = await callLLM(step1System, `RAW CONTENT:\n${rawCopy}`, 1500);
+    let contentIntelligence;
+    try {
+      contentIntelligence = parseJSON(step1Raw, 'object');
+    } catch {
+      console.error('[analyse-content] Step 1 JSON parse failed:', step1Raw.slice(0, 300));
+      return res.status(500).json({ error: 'Step 1 (content intelligence) returned invalid JSON', raw: step1Raw });
+    }
+    console.log('[analyse-content] Step 1 complete. core_message:', contentIntelligence.core_message);
+
+    // ── STEP 2: Visual Recommendation Generation ────────────────────────────
+    console.log('[analyse-content] Step 2: generating visual recommendations…');
+
+    const step2System = buildVisualStrategistPrompt(visualStyle || 'infographic');
+
+    const step2User = `CONTENT INTELLIGENCE REPORT:
+${JSON.stringify(contentIntelligence, null, 2)}
+
+ORIGINAL RAW COPY:
+${rawCopy}`;
+
+    const step2Raw = await callLLM(step2System, step2User, 4000);
+    let recommendations;
+    try {
+      recommendations = parseJSON(step2Raw, 'array');
+    } catch {
+      console.error('[analyse-content] Step 2 JSON parse failed:', step2Raw.slice(0, 300));
+      return res.status(500).json({ error: 'Step 2 (visual recommendations) returned invalid JSON', raw: step2Raw });
+    }
+
+    if (!Array.isArray(recommendations)) {
+      return res.status(500).json({ error: 'Step 2 response was not an array', raw: step2Raw });
+    }
+
+    console.log(`[analyse-content] Done. ${recommendations.length} recommendations generated.`);
+    res.json({ contentIntelligence, recommendations });
+
+  } catch (err) {
+    console.error('Error in /analyse-content:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+
 // POST /refine-prompt - OpenRouter API call
+
 app.post('/refine-prompt', refineLimiter, async (req, res) => {
   const { topic, style, density, referenceImageBase64, mimeType, brandColors } = req.body;
 
   if (!topic || !style) {
     return res.status(400).json({ error: 'Missing topic or style' });
   }
+
+  // Deduplicate raw pasted content before it reaches the AI
+  const cleanTopic = deduplicateContent(topic);
 
   const densityInstructions = {
     Minimal: `
@@ -80,40 +246,16 @@ The user wants an information-rich infographic. Your Phase 1 analysis should ext
   const densitySection = densityInstructions[density] || densityInstructions['Concise'];
 
   const brandSection = brandColors
-    ? `\n\nBRAND COLOURS — the prompt must instruct the image generator to use ONLY these colours throughout:\n${brandColors}`
+    ? `\n\nBRAND COLOUR PALETTE:\nThe following hex codes define the exact colour palette. Apply these to ALL visual elements (backgrounds, fills, typography, accents). DO NOT write these hex codes as visible text or labels anywhere in the image — they are for colour reference only, not text to render:\n${brandColors}`
     : '';
+
 
   const referenceNote = referenceImageBase64
     ? '\n\nA reference image has been provided. Study it carefully to extract: visual style, colour palette, layout structure, typography treatment, and overall aesthetic. Incorporate these specific visual characteristics into your prompt — the output should feel visually coherent with the reference image.'
     : '';
 
-  const systemPrompt = `You are a world-class instructional designer and AI image prompt engineer specialising in infographic creation for the Nano Banana Pro image generation model.
+  const systemPrompt = buildRefinePrompt(density, brandSection, referenceNote);
 
-Your task is a two-phase process:
-
-## PHASE 1 — Instructional Analysis
-Deeply analyse the user's raw input as an expert instructional designer. Extract and structure the content:
-- A compelling, specific TITLE
-- 1 HERO STAT or central insight (the most striking takeaway)
-- Supporting concepts that reinforce the hero (quantity governed by density below)
-- Actionable steps or conclusions (quantity governed by density below)
-- The best VISUAL METAPHOR or layout structure (timeline, funnel, comparison, cycle, radial, before/after, etc.)
-
-${densitySection}
-
-## PHASE 2 — Image Prompt Construction
-Using your structured content from Phase 1, construct a single detailed image generation prompt that:
-1. Opens with the infographic title and layout structure
-2. Describes each visual section in spatial terms (top, left panel, bottom row, central circle, etc.)
-3. Explicitly describes the art style using the provided style description
-4. Specifies typography hierarchy, color palette, background treatment, and mood
-5. Ends with technical quality descriptors (resolution, rendering style, professional quality)
-
-## RULES
-- Treat the user's raw input as the ONLY content source — extract real insights, never invent placeholders
-- The hero stat must lead visually
-- Language must match the user's input language
-- Return ONLY the final image prompt from Phase 2. No preamble, no labels, no markdown, no explanation.`;
 
   try {
     const useVision = !!referenceImageBase64;
@@ -124,9 +266,10 @@ Using your structured content from Phase 1, construct a single detailed image ge
     const userContent = useVision
       ? [
         { type: 'image_url', image_url: { url: `data:${mimeType};base64,${referenceImageBase64}` } },
-        { type: 'text', text: `Topic: ${topic}\n\nArt Style: ${style}${brandSection}${referenceNote}` }
+        { type: 'text', text: `Topic: ${cleanTopic}\n\nArt Style: ${style}${brandSection}${referenceNote}` }
       ]
-      : `Topic: ${topic}\n\nArt Style: ${style}${brandSection}`;
+      : `Topic: ${cleanTopic}\n\nArt Style: ${style}${brandSection}`;
+
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -160,37 +303,81 @@ Using your structured content from Phase 1, construct a single detailed image ge
 });
 
 
+// Helper: upload base64 image to imgbb → get a public URL for kie.ai's image_input
+// kie.ai only accepts public URLs, not raw base64 data. imgbb gives us a 3-day temp URL.
+async function uploadReferenceToImgbb(base64Data, mimeType) {
+  const imgbbKey = process.env.IMGBB_API_KEY;
+  if (!imgbbKey) {
+    console.warn('[generate-image] IMGBB_API_KEY not set — skipping reference image upload. Add IMGBB_API_KEY to .env for reference image support.');
+    return null;
+  }
+  try {
+    const form = new URLSearchParams();
+    form.append('key', imgbbKey);
+    form.append('image', base64Data); // imgbb accepts raw base64 (no data: prefix)
+    const res = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      body: form
+    });
+    const data = await res.json();
+    if (data?.success && data?.data?.url) {
+      console.log('[generate-image] Reference image uploaded to imgbb:', data.data.url);
+      return data.data.url;
+    }
+    console.error('[generate-image] imgbb upload failed:', JSON.stringify(data).slice(0, 200));
+    return null;
+  } catch (err) {
+    console.error('[generate-image] imgbb upload error:', err.message);
+    return null;
+  }
+}
+
 // POST /generate-image - kie.ai createTask
 app.post('/generate-image', generateLimiter, async (req, res) => {
-  const { prompt, resolution, aspectRatio, outputFormat, referenceImageBase64, referenceImageMime } = req.body;
+  const { prompt, resolution, aspectRatio, outputFormat, referenceImageBase64, referenceImageMime, model: requestedModel } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Missing prompt' });
   }
 
-  // Build image_input array — include reference image if provided
-  const imageInput = [];
+  // Validate model — only these two are supported
+  const ALLOWED_MODELS = ['nano-banana-2', 'nano-banana-pro'];
+  const model = ALLOWED_MODELS.includes(requestedModel) ? requestedModel : 'nano-banana-2';
+
+  // If a reference image is provided, upload it to imgbb to get a public URL
+  // that kie.ai can fetch (kie.ai only accepts public URLs, not raw base64).
+  let imageInput = [];
   if (referenceImageBase64 && referenceImageMime) {
-    imageInput.push(`data:${referenceImageMime};base64,${referenceImageBase64}`);
+    const publicUrl = await uploadReferenceToImgbb(referenceImageBase64, referenceImageMime);
+    if (publicUrl) {
+      imageInput = [publicUrl];
+    }
+    // If upload failed (e.g. no IMGBB_API_KEY), we proceed without image_input —
+    // the text prompt already contains a detailed description from the vision model.
   }
 
   try {
+    const kieBody = {
+      model: model,
+
+      input: {
+        prompt,
+        aspect_ratio: aspectRatio || '16:9',
+        resolution: resolution || '2K',
+        output_format: outputFormat || 'png'
+      }
+    };
+    if (imageInput.length > 0) {
+      kieBody.input.image_input = imageInput;
+    }
+
     const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.KIE_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'nano-banana-pro',
-        input: {
-          prompt,
-          image_input: imageInput,
-          aspect_ratio: aspectRatio || '1:1',
-          resolution: resolution || '1K',
-          output_format: outputFormat || 'png'
-        }
-      })
+      body: JSON.stringify(kieBody)
     });
 
     if (!response.ok) {
@@ -202,7 +389,11 @@ app.post('/generate-image', generateLimiter, async (req, res) => {
     const taskId = data?.data?.taskId;
 
     if (!taskId) {
-      return res.status(500).json({ error: 'No taskId returned from kie.ai' });
+      console.error('kie.ai createTask response (no taskId):', JSON.stringify(data));
+      return res.status(500).json({
+        error: 'No taskId returned from kie.ai',
+        kieResponse: data
+      });
     }
 
     res.json({ taskId });
@@ -282,33 +473,7 @@ app.post('/refine-mockup', async (req, res) => {
     ? '\n\nA reference image has been provided. Use it to extract the product name, visual style, colour palette, key text, and iconography — then incorporate those specific details into the prompt placeholders.'
     : '';
 
-  const systemPrompt = `You are an expert text-to-image prompt engineer specialising in product showcase mockups. You have mastered 7 mockup templates. Your job is to fill the correct template with the user's content and return a single, polished, ready-to-use image generation prompt.
-
-## THE 7 TEMPLATES
-
-### 1. LAPTOP
-A professional laptop mockup centered on a neutral gray surface, screen facing forward. The laptop screen displays a high-contrast graphic design titled "[SCREEN_TITLE]" in [SCREEN_TITLE_FONT] and [SCREEN_TITLE_colour] typography. The background of the screen is a [relevant-background-theme] with [relevant background details]. In the center of the screen, [CENTER_ELEMENT] is connected by [LAYOUT_STYLE] to [ICON_COUNT] containing minimalist symbols: [ICON_SYMBOLS]. The layout is framed by a [brand_colour] rectangular border. Top center branding reads "[SCREEN_SUBTITLE]". Photorealistic 8k resolution, studio lighting, clean tech aesthetic, sharp focus on the screen contents with subtle reflections on the hardware.
-
-### 2. 3D BOOK (PORTRAIT)
-A professional 3D portrait-oriented book mockup titled "[BOOK_TITLE_MAIN]" angled at a three-quarter perspective against a [light-brand-colour] background. The book cover features a [relevant-background-theme] with [relevant background details]. At the top center, white sans-serif text reads "[PROGRAM_NAME]" accompanied by a minimalist logo. Centered on the cover is [COVER_ICON]. A teal rectangular border frames the cover elements. [LENS_FLARE_COUNT] bright orange-white lens flares with sharp diffraction spikes are positioned symmetrically. The top section reads "[BOOK_TITLE_TOP]" in bold white uppercase sans-serif, and "[BOOK_TITLE_MAIN]" is centered below in a [TITLE_BAR_COLOR] horizontal bar. Clean, sharp edges, high-gloss finish, studio lighting with soft drop shadows.
-
-### 3. IMAC / DESKTOP MONITOR
-A high-resolution 3D mockup of a silver all-in-one desktop computer centered on a clean white surface. The monitor displays a professional webinar interface with a [relevant-background-theme] background with [relevant background details]. In the [PRESENTER_POSITION] corner, a high-quality portrait of [PRESENTER_DESCRIPTION] is overlaid. The top center features [BRAND_TEXT_COLORS] text reading "[PROGRAM_NAME]". Centered on the screen is a large white line-art logo featuring [CENTER_LOGO]. [BG_DETAIL]. A [LIVE_INDICATOR] is in the bottom left. The hardware has a metallic finish with realistic screen reflections and a soft drop shadow. 8k resolution, minimalist corporate aesthetic, sharp focus.
-
-### 4. TWIN MONITORS
-A professional 3D product mockup of two silver all-in-one desktop monitors placed side-by-side on a seamless, soft-gray studio floor. The monitors are arranged in a shallow butterfly configuration, with each monitor subtly angled inward at exactly 15 degrees so their inner edges are slightly closer to the viewer than their outer edges. The monitors do not touch, leaving a sliver of space in the center. The left screen displays [LEFT_SCREEN_CONTENT] with [LEFT_TEXT_COLORS] text reading "[LEFT_SCREEN_TITLE]". The right screen displays [RIGHT_SCREEN_CONTENT] with the text "[RIGHT_SCREEN_TITLE]". High-key studio lighting, realistic metallic aluminum textures, soft ambient occlusion shadows, and 8k photorealistic resolution. The back of the monitors is not visible
-
-### 5. IPAD / TABLET
-A photorealistic 3D mockup of a sleek black tablet, in [ORIENTATION], floating at a [ANGLE] against a [BACKGROUND] background. The tablet screen displays a high-contrast graphic titled "[SCREEN_TITLE]" in bold white sans-serif typography. The middle portion of the title is set within a [TITLE_BANNER_COLOR] horizontal banner. The background on the screen is a [relevant-background-theme] with [relevant background details]. Centered in the lower half is [CENTER_ICON]. The layout is framed by a [BRAND_COLOR] double-line border. The tablet has a glossy glass finish with realistic screen glare and a soft drop shadow on the ground. 8k resolution, cinematic lighting, professional product photography style.
-
-### 6. PAPERBACK BOOK
-A professional 3D paperback book mockup floating in a minimalist light gray studio space. The book is angled at a three-quarter perspective, showing the front cover and the texture of the white page edges. The cover design has a white top banner with [LOGO_STYLE] and the text "[COLLECTION_NAME]". The center of the cover features [COVER_IMAGE] with "[MAIN_TITLE]" in bold white condensed sans-serif text. The bottom of the cover is a solid [ACCENT_COLOR] bar with the subtitle "[SUBTITLE]" in small white italics. High-resolution, photorealistic paper textures, soft ambient occlusion shadows, 8k resolution, clean and modern aesthetic.
-
-### 7. RESPONSIVE DEVICE COMBO (PHONE + LAPTOP + TABLET)
-A professional 3D responsive web design mockup featuring a silver MacBook Pro laptop, a black smartphone on a [STAND_STYLE], and a [TABLET_ORIENTATION]-oriented black-bezel tablet. The laptop is centered on a seamless light gray studio floor. To its right, the tablet floats in the air, angled at 15 degrees and positioned slightly in front of the laptop to create a layered overlap and depth. Just in front of the laptop, to the [PHONE_POSITION], is the smartphone, positioned slightly in front of the laptop to create depth. All three screens display "[SITE_NAME]" website featuring [HERO_VISUAL]. The [COLOR_PALETTE] color palette is consistent across all three screens. The tablet's dark bezel provides sharp contrast against the high-key gray environment. Photorealistic aluminum and glass textures, realistic screen glare, soft ambient occlusion shadows, 8k resolution, elegant and clean lifestyle tech aesthetic.
-
-## YOUR TASK
-The user will tell you their product/content details and which mockup type they want. Fill the correct template's placeholders with their content. Return ONLY the completed prompt text — no preamble, no template number, no markdown, no explanation. Just the raw filled-in prompt ready to paste into an image generator.`;
+  const systemPrompt = MOCKUP_SYSTEM_PROMPT;
 
   try {
     const useVision = !!referenceImageBase64;
@@ -373,38 +538,7 @@ app.post('/reverse-engineer', async (req, res) => {
 
   const visionModel = process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.0-flash-001';
 
-  const systemPrompt = `You are an expert AI image prompt engineer and visual design analyst. Your task is to analyse an infographic image and produce two text-to-image prompts.
-
-CRITICAL: Return ONLY a raw JSON object — no markdown fences, no prose before or after. All newlines inside string values MUST be escaped as \\n so the JSON is valid.
-
-The JSON object must have exactly this shape:
-{
-  "exactPrompt": "...",
-  "templatePrompt": "..."
-}
-
-## exactPrompt
-A structured, human-readable prompt that faithfully recreates the uploaded infographic. Format it as six clearly labelled sections using the exact headings below, each on its own line, separated by a blank line. Use plain text only (no markdown symbols like # or *).
-
-Start with a single unlabelled sentence summarising the infographic subject, purpose, and overall visual format — no heading, just the sentence. Then leave a blank line before the next section.
-
-ART STYLE:
-Describe the visual design language: illustration style, colour mood, rendering technique, level of detail, and any distinctive aesthetic. Include the dominant colour palette with hex codes if identifiable.
-
-SHAPE & COMPOSITION:
-Describe the spatial layout in detail — the overall grid or flow structure, how sections are divided, the shapes used, aspect ratio feel, whitespace usage, and the visual hierarchy from top to bottom / left to right.
-
-TEXT & TYPOGRAPHY:
-Describe all text elements: the main title treatment, subheadings, body labels, callout statistics, and any icon labels. Note font style, capitalisation patterns, and how text is positioned relative to visuals.
-
-KEY POINTS BY SECTION:
-List each distinct section or panel of the infographic in order, with its exact heading/label, the specific data points, statistics, bullet text, or key phrases it contains, and any icons or visual elements associated with it.
-
-MAIN INTENT:
-State the primary message or call-to-action the infographic communicates to its audience, and any emotional or persuasive tone.
-
-## templatePrompt
-The same structural prompt but with ALL content-specific details replaced with fill-in-the-blank placeholders in [SQUARE BRACKETS]. Preserve everything about the design language: layout structure, typography hierarchy, visual style, art direction, colour palette. Replace: all specific text, statistics, data values, named entities, product names, dates. Use meaningful placeholder labels like [HERO STATISTIC], [SUPPORTING DATA POINT 1], [SECTION TITLE], [BRAND NAME], [CALL TO ACTION], etc.`;
+  const systemPrompt = REVERSE_ENGINEER_PROMPT;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -493,33 +627,7 @@ app.post('/thumbnail-idea', refineLimiter, async (req, res) => {
     `${cat}:\n${templates.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}`
   ).join('\n\n');
 
-  const systemPrompt = `You are an expert YouTube thumbnail strategist and hook writer.
-
-You have access to the following hook template library. Each template uses [Placeholders] you fill in with the user's topic:
-
-${hooksText}
-
-## Your Task
-Analyse the user's raw idea and return exactly this JSON (no markdown fences, no extra text):
-
-{
-  "topic": "concise 3-8 word description of the main topic",
-  "hooks": [
-    { "category": "CategoryName", "text": "Fully written hook with placeholders replaced — ready to use as a YouTube title" },
-    { "category": "CategoryName", "text": "Second hook from a different category" },
-    { "category": "CategoryName", "text": "Third hook from a different category" }
-  ],
-  "recommendedFeeling": "one of: Curious, Shocked, Inspired, Concerned, Excited, Confident",
-  "headlineSuggestion": "3-5 word bold headline for the thumbnail overlay",
-  "subtextSuggestion": "short secondary line (optional, 3-6 words)"
-}
-
-Rules:
-- All 3 hooks must be from DIFFERENT categories
-- Fill all [Placeholders] with the user's actual topic
-- Hooks should be real, compelling, immediately usable as YouTube titles
-- headlineSuggestion must be SHORT — it appears as large text on a thumbnail (max 5 words)
-- Return ONLY the JSON object`;
+  const systemPrompt = buildThumbnailIdeaPrompt(hooksText);
 
   try {
     const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet';
@@ -535,7 +643,7 @@ Rules:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `My video idea:\n${rawIdea.trim()}` }
         ],
-        max_tokens: 600
+        max_tokens: 1200
       })
     });
 
@@ -576,7 +684,9 @@ app.post('/thumbnail-prompt', refineLimiter, async (req, res) => {
     videoTitle, topic, niche, desiredEmotion, subjectPreference,
     brandColors, headlineText, subtextText,
     loopOverride, curiosityGapOverride, styleTag, expressionOverride,
-    colorPreset, customAccentHex, layoutOverride,
+    colorPreset,
+    customBrandBg, customBrandAccent, customBrandText,
+    layoutOverride,
     referenceImageBase64, referenceImageMime
   } = req.body;
 
@@ -584,13 +694,52 @@ app.post('/thumbnail-prompt', refineLimiter, async (req, res) => {
     return res.status(400).json({ error: 'videoTitle and topic are required' });
   }
 
-  const colorSection = customAccentHex
-    ? `Custom accent colour: ${customAccentHex}`
-    : colorPreset
-      ? `Colour preset: ${colorPreset}`
-      : brandColors
-        ? `Brand colours: ${brandColors}`
-        : 'No specific colours provided — choose a suitable preset from the 7 presets.';
+  // Convert a hex color to a human-readable description.
+  // CRITICAL: hex codes must NEVER appear in image generation prompts —
+  // image models render them literally as color swatches/labels in the output.
+  function hexToColorDesc(hex) {
+    if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return null;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const s = max === min ? 0 : (max - min) / (l < 0.5 ? max + min : 510 - max - min);
+    const h = max === min ? 0 :
+      max === r ? ((g - b) / (max - min) + (g < b ? 6 : 0)) * 60 :
+        max === g ? ((b - r) / (max - min) + 2) * 60 :
+          ((r - g) / (max - min) + 4) * 60;
+    const light = l < 60 ? 'dark' : l > 200 ? 'light' : l > 150 ? 'pale' : 'mid';
+    const sat = s < 30 ? 'neutral' : s < 80 ? 'muted' : 'vivid';
+    const hueDesc =
+      h < 15 || h >= 345 ? 'red' :
+        h < 45 ? 'orange' :
+          h < 75 ? 'yellow' :
+            h < 150 ? 'green' :
+              h < 195 ? 'teal' :
+                h < 255 ? 'blue' :
+                  h < 285 ? 'indigo' :
+                    h < 320 ? 'purple' :
+                      h < 345 ? 'pink' : 'red';
+    if (r > 230 && g > 230 && b > 230) return 'crisp white';
+    if (r < 25 && g < 25 && b < 25) return 'deep black';
+    if (s < 20) return l < 80 ? 'dark charcoal grey' : l > 200 ? 'light silver grey' : 'mid stone grey';
+    return `${light} ${sat} ${hueDesc}`;
+  }
+
+  let colorSection;
+  if (customBrandBg && customBrandAccent) {
+    const bgDesc = hexToColorDesc(customBrandBg) || 'dark background';
+    const accentDesc = hexToColorDesc(customBrandAccent) || 'vivid accent';
+    const textDesc = customBrandText ? hexToColorDesc(customBrandText) || 'white' : 'white';
+    colorSection = `Custom brand palette — background: ${bgDesc}, accent: ${accentDesc}, text/typography: ${textDesc}. Apply these as the dominant colour mood of the scene.`;
+  } else if (colorPreset) {
+    colorSection = `Colour preset: ${colorPreset}`;
+  } else if (brandColors) {
+    colorSection = `Brand colour style: ${brandColors}`;
+  } else {
+    colorSection = 'No specific colours — choose a visually striking palette that suits the topic mood.';
+  }
 
   const overrides = [
     loopOverride ? `Loop type OVERRIDE (user selected): ${loopOverride}` : '',
@@ -600,69 +749,9 @@ app.post('/thumbnail-prompt', refineLimiter, async (req, res) => {
     layoutOverride ? `Layout OVERRIDE (user selected): ${layoutOverride}` : '',
   ].filter(Boolean).join('\n');
 
-  const systemPrompt = `You are an expert YouTube thumbnail prompt engineer for Nano Banana Pro image generation.
+  const systemPrompt = THUMBNAIL_PROMPT_SYSTEM;
 
-PSYCHOLOGY FRAMEWORK:
 
-Loop Types — classify from video title:
-- desire: educational/how-to, pain+solution → show end state or transformation
-- interest: entertainment/story/reaction → show tension, curiosity, unresolved moment
-- aspiration: motivational/mindset/coaching → show the aspirational after state
-- fear: warnings/mistakes/risk → show the painful before state
-
-Curiosity Gaps:
-- before_after: Split screen — relatable before, aspirational after
-- challenge: Subject facing or overcoming high-stakes situation
-- contradiction: Visually mismatched elements that feel "wrong"
-- novelty: One bizarre/unexpected element that makes viewer stop
-- result: End state clearly shown, journey hidden
-
-Attention Triggers (choose MAX 3):
-1. Color Contrast, 2. Strong Face + Expression, 3. Famous/Recognisable Person (only if in video), 4. Big Number/Dollar Figure, 5. Familiar Icon/Visual Shortcut, 6. Cinematic/Aesthetic Imagery, 7. Movement/Drama/Danger
-
-Expression Library — map from desiredEmotion:
-- Curious → "curious and engaged — warm and approachable, suggesting the topic is more accessible than expected"
-- Shocked → "wide-eyed and genuinely surprised — not theatrical, but authentically caught off-guard"
-- Inspired → "quietly confident and inspired — radiating the feeling of someone who has already made the transformation"
-- Concerned → "slightly concerned but composed — the face of someone who knows something the viewer doesn't"
-- Excited → "radiating quiet, earned confidence — the expression of someone who has come out the other side"
-- Confident → "calm, assured, and professional — projecting quiet competence rather than loud confidence"
-
-Layouts:
-- offset: Subject on left/right third — most versatile, use for desire/aspiration loops
-- centered: Subject in center — use for big reveals, challenges, authority
-- split_screen: Two halves — use ONLY for before/after or comparison topics
-
-3-Element Rule: NEVER more than 3 visual elements. Always: 1) Subject, 2) Context visual, 3) Text/graphic accent.
-
-Color Psychology: green=good/positive, red=bad/warning, warm tones=aspiration, cool=tech/authority. Dark backgrounds with bright accents perform best on both dark and light mode.
-Contrast Warning: If the chosen colour is light (white, cream, light yellow) on a light/white background, flag it.
-
-2-Second Test: Key message must be comprehensible within 2 seconds. If complex or crowded, it fails.
-
-Quality Modifiers — APPEND TO EVERY PROMPT:
-"Soft, diffused cinematic lighting. [LAYOUT] composition using the Rule of Thirds. No key visual elements in the bottom-right corner (reserved for YouTube timestamp overlay). All text and graphic elements large enough to read clearly on a mobile phone screen at thumbnail size. Maximum 3 visual elements in the frame. High detail, photorealistic quality. The overall aesthetic is eye-catching, modern, and designed to maximise click-through rate. 16:9 aspect ratio, 1920x1080 resolution."
-
-TASK: Using all inputs below, follow the 9-step assembly logic, then output ONLY a raw valid JSON object — no markdown, no prose, no code fences.
-
-Required JSON shape:
-{
-  "loopType": "desire|interest|aspiration|fear",
-  "curiosityGap": "before_after|challenge|contradiction|novelty|result",
-  "attentionTriggers": ["trigger1", "trigger2"],
-  "expressionUsed": "expression string from library above",
-  "layoutUsed": "offset|centered|split_screen",
-  "contrastWarning": null,
-  "twoSecondTestPass": true,
-  "twoSecondTestNote": "brief note only if false, else empty string",
-  "prompts": {
-    "offset": "FULL ready-to-generate prompt — offset composition — all variables resolved — quality modifiers appended",
-    "centered": "FULL ready-to-generate prompt — centered composition — all variables resolved — quality modifiers appended",
-    "splitScreen": "FULL ready-to-generate prompt — split screen composition or creative variation if not applicable — all variables resolved — quality modifiers appended"
-  }
-}
-
-All three prompts must be fully written, detailed, and immediately usable with Nano Banana. Each must differ in layout and composition but share the same topic, style, and colour.`;
 
   const userMessage = `Video Title: ${videoTitle}
 Topic/Niche: ${topic}${niche ? ` / ${niche}` : ''}
@@ -747,6 +836,59 @@ ${overrides ? `\nUser overrides:\n${overrides}` : ''}`;
   } catch (err) {
     console.error('Error in /thumbnail-prompt:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// POST /refine-strategy-prompt — refine a single visual recommendation prompt
+app.post('/refine-strategy-prompt', refineLimiter, async (req, res) => {
+  const { currentPrompt, instruction } = req.body;
+  if (!currentPrompt || !instruction) {
+    return res.status(400).json({ error: 'Missing currentPrompt or instruction' });
+  }
+  const model = process.env.VISUAL_STRATEGY_MODEL || 'google/gemini-3-flash-preview';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const systemPrompt = `You are an expert AI image prompt engineer refining an existing image generation prompt.
+
+Apply the given refinement instruction to improve the prompt, preserving the existing structure.
+
+The prompt uses this 5-section format — preserve it exactly:
+
+[Opening sentence — overall style and intent of the image]
+
+Artwork Style: [Rendering technique and illustration style]
+
+Colour Palette: [Main background colour + hex, primary accent + hex, highlight + hex, text colour + hex]
+
+Design: [Central focal point, supporting elements, icons, steps — what an artist would draw]
+
+Layout: [Spatial composition — what sits top, bottom, left, right, centre]
+
+Typography: [Font treatment. All text that appears on the image is in "double quotation marks" here]
+
+RULE: Only text in "double quotes" inside the Typography section renders visibly on the image. Everything else is art direction for the artist and must NOT be phrased as on-screen text.
+
+Return ONLY the refined prompt in the same 5-section format — no preamble, no markdown, no explanation.`;
+
+
+    const userMessage = `CURRENT PROMPT:\n${currentPrompt}\n\nINSTRUCTION:\n${instruction}`;
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }], max_tokens: 1200 })
+    });
+    clearTimeout(timeout);
+    if (!r.ok) { const e = await r.text(); return res.status(r.status).json({ error: `OpenRouter error: ${e.slice(0, 200)}` }); }
+    const d = await r.json();
+    const refined = d.choices?.[0]?.message?.content?.trim();
+    if (!refined) return res.status(500).json({ error: 'Empty response from AI' });
+    res.json({ refinedPrompt: refined });
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') return res.status(504).json({ error: 'Request timed out' });
+    res.status(500).json({ error: e.message });
   }
 });
 

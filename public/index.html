@@ -25,16 +25,80 @@
 
   <!-- Tab Navigation -->
   <nav class="tab-bar" role="tablist">
-    <button class="tab-btn active" data-tab="creation" role="tab" aria-selected="true">🎨 Creation</button>
+    <button class="tab-btn active" data-tab="strategy" role="tab" aria-selected="true">🧠 Visual Strategy</button>
+    <button class="tab-btn" data-tab="creation" role="tab" aria-selected="false">🎨 Creation</button>
     <button class="tab-btn" data-tab="reverse" role="tab" aria-selected="false">🔍 Reverse Engineer</button>
     <button class="tab-btn" data-tab="mockups" role="tab" aria-selected="false">🖼 Mockups</button>
-    <button class="tab-btn" data-tab="thumbnails" role="tab" aria-selected="false">🎬 Thumbnails</button>
+    <button class="tab-btn" data-tab="thumbnails" role="tab" aria-selected="false">🎦 Thumbnails</button>
   </nav>
+
+  <!-- ═══════════════════════════════════════
+       TAB: Visual Strategy
+  ═══════════════════════════════════════ -->
+  <div id="tab-strategy" class="tab-panel active">
+    <main class="strategy-main">
+
+      <div class="re-intro">
+        <h2 class="re-title">🧠 Visual Strategy</h2>
+        <p class="re-subtitle">Paste your website copy below. The AI will audit it and identify every section that
+          would communicate more clearly as a visual — infographic, diagram, or graphic card.</p>
+      </div>
+
+      <section class="strategy-input-section">
+
+        <!-- Step 1: Visual Style Selector -->
+        <div class="vstyle-selector">
+          <label class="strategy-input-label">Step 1 — What kind of visual are you creating?</label>
+          <p class="strategy-input-hint">Choose a format. This shapes how the AI interprets your copy and writes the
+            image prompt.</p>
+          <div class="vstyle-grid">
+            <button class="vstyle-btn active" data-vstyle="infographic"
+              data-tip="Data, steps, or stats laid out visually">📊 Infographic</button>
+            <button class="vstyle-btn" data-vstyle="framework_diagram"
+              data-tip="A named model or system (like RISE, TIPSY, C.O.N.V.E.R.T.)">🏗 Framework Diagram</button>
+            <button class="vstyle-btn" data-vstyle="visual_metaphor"
+              data-tip="Abstract concept represented through symbolic imagery">🎨 Visual Metaphor</button>
+            <button class="vstyle-btn" data-vstyle="process_flow" data-tip="Sequential steps or a journey map">🔀
+              Process Flow</button>
+            <button class="vstyle-btn" data-vstyle="thumbnail"
+              data-tip="Bold, scroll-stopping social or YouTube graphic">⚡ Thumbnail</button>
+            <button class="vstyle-btn" data-vstyle="mockup"
+              data-tip="Product, screen, or brand asset shown in context">📱 Mockup</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Paste copy -->
+        <label class="strategy-input-label" for="strategy-copy-input" style="margin-top:20px;display:block">Step 2 —
+          Paste your website copy</label>
+        <p class="strategy-input-hint">Works best with 200–2,000 words. Paste a page, a section, or your full site copy.
+        </p>
+        <textarea id="strategy-copy-input" class="strategy-textarea"
+          placeholder="e.g. 'I am a trauma-informed life coach helping women over 40 rebuild their identity after loss. My RISE Method takes clients through four stages: Recover, Identify, Strengthen, Evolve. Most of my clients arrive feeling invisible and exhausted...'"
+          rows="10"></textarea>
+        <div class="strategy-actions-row">
+          <button id="btn-analyse-content" class="btn-primary">🧠 Analyse My Content</button>
+          <span class="llm-badge" id="strategy-llm-badge" title="LLM used for content analysis">⚡ Loading…</span>
+        </div>
+        <div id="strategy-status" class="status-message hidden"></div>
+      </section>
+
+
+      <!-- Results populated by JS -->
+      <section id="strategy-results" class="hidden">
+        <div class="strategy-results-header">
+          <h3 class="strategy-results-title">Visual Recommendations</h3>
+          <p class="strategy-results-subtitle">Click any card to send it directly to the Creation tab.</p>
+        </div>
+        <div id="strategy-cards" class="strategy-cards-grid"></div>
+      </section>
+
+    </main>
+  </div>
 
   <!-- ═══════════════════════════════════════
        TAB: Creation
   ═══════════════════════════════════════ -->
-  <div id="tab-creation" class="tab-panel active">
+  <div id="tab-creation" class="tab-panel">
     <main>
 
       <!-- Rate limit notice -->
@@ -46,8 +110,9 @@
       <!-- Section 1: Brief Input -->
       <section id="section-brief">
         <label for="topic-input">What is your infographic about?</label>
-        <textarea id="topic-input" placeholder="Describe the topic, concept, or message of your infographic..."
-          rows="4"></textarea>
+        <textarea id="topic-input" placeholder="Describe the topic, concept, or message of your infographic..." rows="5"
+          style="resize:vertical;overflow-y:auto;min-height:100px;max-height:480px"></textarea>
+
         <div class="density-row">
           <label class="density-label">Detail Density</label>
           <div class="toggle-group" id="density-toggle">
@@ -153,6 +218,7 @@
           <button id="btn-refine" class="btn-primary">Refine Prompt</button>
           <button id="btn-quick-gen" class="btn-quick-gen">⚡ Quick Gen</button>
           <button id="btn-direct-prompt" class="btn-direct-prompt">✏ Direct Prompt</button>
+          <button class="model-toggle" title="Click to switch model">⚡ nano-banana-2</button>
         </div>
         <div id="cost-estimate" class="cost-estimate hidden"></div>
         <div id="refine-status" class="status-message hidden"></div>
@@ -167,7 +233,16 @@
             <button id="btn-generate" class="btn-primary btn-generate-inline" disabled>Generate Image</button>
             <span id="copy-confirm" class="copy-confirm hidden">Copied to clipboard</span>
           </div>
+          <div class="creation-iter-row">
+            <span class="creation-iter-label">Iterations</span>
+            <div class="toggle-group" id="creation-iterations-toggle">
+              <button class="toggle-btn active" data-value="1">1</button>
+              <button class="toggle-btn" data-value="2">2</button>
+              <button class="toggle-btn" data-value="3">3</button>
+            </div>
+          </div>
         </div>
+
       </section>
 
       <!-- Section 6: Active Queue -->
@@ -217,6 +292,7 @@
       <!-- Analyse button -->
       <div class="re-actions">
         <button id="btn-analyse" class="btn-primary" disabled>🔍 Analyse Image</button>
+        <button class="model-toggle" title="Click to switch model">⚡ nano-banana-2</button>
         <div id="re-status" class="status-message hidden"></div>
       </div>
 
@@ -269,9 +345,26 @@
           rows="4">Create a mockup with the brand saying "Your Brand Here" as a default placemarker image. Include some impressive background image with a high contrast foreground text saying "Your Brand Here" with a Simple tagline saying "Your Tagline Goes Here".</textarea>
       </section>
 
-      <!-- Step 2: Mockup Type Chips -->
+      <!-- Step 2: Optional Reference Image -->
       <section class="mockup-section">
-        <label class="mockup-label">Step 2 — Choose one or more mockup types</label>
+        <label class="mockup-label">Step 2 — Reference image <span class="mockup-optional">(optional)</span></label>
+        <div id="mockup-drop-zone" class="drop-zone mockup-drop-zone">
+          <input type="file" id="mockup-file-input" accept="image/png,image/jpeg,image/webp" />
+          <div class="drop-zone-inner">
+            <div class="drop-zone-icon">📎</div>
+            <p class="drop-zone-text">Drop a reference image or <span class="drop-zone-link">browse</span></p>
+            <p class="drop-zone-hint">PNG · JPG · WEBP · Max 10 MB</p>
+          </div>
+        </div>
+        <div id="mockup-preview" class="re-preview hidden">
+          <img id="mockup-preview-img" alt="Reference image preview" />
+          <button id="mockup-change-img" class="btn-secondary">↩ Remove Image</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Mockup Type Chips -->
+      <section class="mockup-section">
+        <label class="mockup-label">Step 3 — Choose one or more mockup types</label>
         <p class="multi-select-hint" style="margin-top:-4px;">Select multiple types to use Quick Gen</p>
         <div class="style-grid mockup-chips" id="mockup-chips">
           <button class="style-card active" data-type="Laptop">
@@ -298,28 +391,12 @@
         </div>
       </section>
 
-      <!-- Step 3: Optional Reference Image -->
-      <section class="mockup-section">
-        <label class="mockup-label">Step 3 — Reference image <span class="mockup-optional">(optional)</span></label>
-        <div id="mockup-drop-zone" class="drop-zone mockup-drop-zone">
-          <input type="file" id="mockup-file-input" accept="image/png,image/jpeg,image/webp" />
-          <div class="drop-zone-inner">
-            <div class="drop-zone-icon">📎</div>
-            <p class="drop-zone-text">Drop a reference image or <span class="drop-zone-link">browse</span></p>
-            <p class="drop-zone-hint">PNG · JPG · WEBP · Max 10 MB</p>
-          </div>
-        </div>
-        <div id="mockup-preview" class="re-preview hidden">
-          <img id="mockup-preview-img" alt="Reference image preview" />
-          <button id="mockup-change-img" class="btn-secondary">↩ Remove Image</button>
-        </div>
-      </section>
-
       <!-- Step 4: Refine Prompt -->
       <section class="mockup-section">
         <div class="refine-actions">
           <button id="btn-mockup-refine" class="btn-primary">✨ Refine Prompt</button>
           <button id="btn-mockup-quick-gen" class="btn-quick-gen hidden">⚡ Quick Gen</button>
+          <button class="model-toggle" title="Click to switch model">⚡ nano-banana-2</button>
         </div>
         <div id="mockup-refine-status" class="status-message hidden"></div>
         <div id="mockup-prompt-output" class="hidden">
@@ -406,6 +483,7 @@
           generate.</p>
       </div>
 
+
       <!-- ── SECTION: Step 1 — Raw Idea Input ── -->
       <section id="tn-section-idea" class="tn-wizard">
         <label class="tn-question-label" for="tn-idea-input">💡 What's your video about?</label>
@@ -415,13 +493,20 @@
           placeholder="e.g. I want to make a video about how most people lose weight the wrong way — cutting calories too fast. I'll show a step-by-step plan using metabolic cycling that I used to lose 12kg in 10 weeks without losing muscle. My audience is 30-50 year old professionals who are time-poor."></textarea>
         <div id="tn-idea-status" class="status-message hidden"></div>
         <div class="tn-intake-nav" style="justify-content:space-between;">
-          <button id="btn-tn-reset-idea" class="btn-secondary">↺ Clear</button>
+          <button id="btn-tn-reset-idea" class="btn-secondary">↺ Start Over</button>
+          <button class="model-toggle" title="Click to switch model">⚡ nano-banana-2</button>
           <button id="btn-tn-analyse-idea" class="btn-primary">✦ Analyse My Idea</button>
         </div>
       </section>
 
       <!-- ── SECTION: Step 2 — Selection Panel ── -->
       <section id="tn-section-selection" class="hidden">
+
+        <!-- Start Over shortcut -->
+        <div style="text-align:right; margin-bottom:4px;">
+          <button id="btn-tn-reset-selection" class="btn-secondary" style="font-size:12px;padding:5px 12px;">↺ Start
+            Over</button>
+        </div>
 
         <!-- Hook Picker -->
         <div class="tn-results-block">
@@ -446,13 +531,61 @@
 
         <!-- Colour Picker -->
         <div class="tn-results-block">
-          <h3 class="tn-selector-heading">Brand Colour <span class="tn-override-label">optional</span></h3>
+          <h3 class="tn-selector-heading">Brand Colours <span class="tn-override-label">optional</span></h3>
+
+          <!-- Pre-defined presets -->
+          <p class="tn-field-label" style="margin-bottom:8px;">Pre-defined</p>
           <div id="tn-color-picker" class="tn-color-row"></div>
-          <div class="tn-custom-hex-row" style="margin-top:12px;">
-            <span style="font-size:12px;color:var(--text-muted,#8888aa)">Custom accent hex:</span>
-            <input id="tn-custom-hex" class="tn-hex-input" type="text" maxlength="7" placeholder="#FF0000" />
-            <span id="tn-hex-preview" class="tn-hex-preview" style="background:transparent"></span>
+
+          <!-- Saved custom brands (rendered by JS) -->
+          <div id="tn-saved-brands-row" class="tn-saved-brands-row hidden">
+            <p class="tn-field-label" style="margin:12px 0 8px;">Your Saved Brands</p>
+            <div id="tn-saved-brands" class="tn-color-row"></div>
           </div>
+
+          <!-- Custom brand builder -->
+          <details class="tn-brand-builder" id="tn-brand-builder">
+            <summary class="tn-brand-builder-toggle">＋ Build a Custom Brand</summary>
+            <div class="tn-brand-builder-body">
+              <div class="tn-brand-color-row">
+                <div class="tn-brand-color-field">
+                  <label class="tn-field-label">Background</label>
+                  <div class="tn-color-well-wrap">
+                    <input type="color" id="tn-brand-bg" class="tn-color-well" value="#0d0d0d" />
+                    <input type="text" id="tn-brand-bg-hex" class="tn-hex-mini" maxlength="7" value="#0d0d0d"
+                      placeholder="#0d0d0d" />
+                  </div>
+                </div>
+                <div class="tn-brand-color-field">
+                  <label class="tn-field-label">Accent</label>
+                  <div class="tn-color-well-wrap">
+                    <input type="color" id="tn-brand-accent" class="tn-color-well" value="#7c5cfc" />
+                    <input type="text" id="tn-brand-accent-hex" class="tn-hex-mini" maxlength="7" value="#7c5cfc"
+                      placeholder="#7c5cfc" />
+                  </div>
+                </div>
+                <div class="tn-brand-color-field">
+                  <label class="tn-field-label">Text</label>
+                  <div class="tn-color-well-wrap">
+                    <input type="color" id="tn-brand-text" class="tn-color-well" value="#ffffff" />
+                    <input type="text" id="tn-brand-text-hex" class="tn-hex-mini" maxlength="7" value="#ffffff"
+                      placeholder="#ffffff" />
+                  </div>
+                </div>
+              </div>
+              <!-- Live preview strip -->
+              <div id="tn-brand-preview-strip" class="tn-brand-preview-strip">
+                <span id="tn-brand-preview-label" style="font-size:13px;font-weight:700;">Preview Text</span>
+              </div>
+              <!-- Save row -->
+              <div class="tn-brand-save-row">
+                <input type="text" id="tn-brand-name" class="tn-intake-input" placeholder="Brand name (e.g. My Channel)"
+                  style="flex:1;font-size:13px;" maxlength="40" />
+                <button id="btn-tn-save-brand" class="btn-secondary"
+                  style="font-size:12px;padding:6px 16px;white-space:nowrap;">💾 Save Brand</button>
+              </div>
+            </div>
+          </details>
         </div>
 
         <!-- Headline + Subtext -->
@@ -467,10 +600,12 @@
             placeholder="e.g. No Gym Required" />
         </div>
 
-        <!-- Build button -->
+        <!-- Action buttons — both always visible -->
         <div class="tn-results-block">
-          <button id="btn-tn-build" class="btn-primary tn-generate-btn">✦ Build Prompts &amp; Generate</button>
-          <p class="tn-rate-note">Uses 1 analysis credit + 3 generation credits</p>
+          <div class="tn-dual-action-row">
+            <button id="btn-tn-build" class="btn-primary tn-action-btn">✦ Build Prompts</button>
+            <button id="btn-tn-generate-pre" class="btn-secondary tn-action-btn" disabled>⚡ Generate Variations</button>
+          </div>
           <div id="tn-selection-status" class="status-message hidden" style="margin-top:12px;"></div>
         </div>
 
@@ -540,8 +675,11 @@
 
         <!-- Generate -->
         <div id="tn-gen-section" class="tn-results-block hidden">
-          <button id="btn-tn-generate" class="btn-primary tn-generate-btn">⚡ Generate 3 Variations</button>
-          <p class="tn-rate-note">Each click uses 3 of your 30/hr generation quota</p>
+          <div class="tn-dual-action-row">
+            <button id="btn-tn-rebuild" class="btn-secondary tn-action-btn">↺ Rebuild Prompts</button>
+            <button id="btn-tn-generate" class="btn-primary tn-action-btn">⚡ Generate 3 Variations</button>
+          </div>
+          <p class="tn-rate-note" id="tn-rate-note">3 variations selected — uses 3 of your 30/hr quota</p>
         </div>
 
         <!-- Generation Grid -->

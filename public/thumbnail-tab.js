@@ -65,10 +65,13 @@ let tnAnalysis = null;             // response from /thumbnail-prompt
 let tnSelectedHook = null;         // { category, text }
 let tnSelectedFeeling = null;
 let tnSelectedPerson = null;
-let tnSelectedColorPreset = null;
-let tnCustomAccent = '';
 let tnHeadline = '';
 let tnSubtext = '';
+
+// Colour / brand
+let tnSelectedColorPreset = null;
+let tnCustomBrand = null;          // { id, name, bg, accent, text }
+let tnSavedBrands = [];            // persisted to localStorage 'tn_brands'
 
 // Results overrides (post-analysis)
 let tnSelectedGap = null;
@@ -80,6 +83,7 @@ let tnReferenceImageBase64 = null;
 let tnReferenceImageMime = null;
 
 // Generation
+let tnEnabledLayouts = { offset: true, centered: true, split: true };
 let tnGenResults = { offset: null, centered: null, splitScreen: null };
 let tnPollingIntervals = {};
 let tnPollingTimeouts = {};
@@ -93,10 +97,35 @@ function initThumbnailsTab() {
     document.getElementById('btn-tn-analyse-idea').addEventListener('click', tnAnalyseIdea);
     document.getElementById('btn-tn-build').addEventListener('click', tnBuildAndGenerate);
     document.getElementById('btn-tn-reset-idea').addEventListener('click', tnReset);
+    document.getElementById('btn-tn-reset-selection').addEventListener('click', tnReset);
     document.getElementById('btn-tn-reset-results').addEventListener('click', tnReset);
     document.getElementById('btn-tn-generate').addEventListener('click', tnGenerate);
+    // Step-2 Generate button (visible before results load) — same function
+    document.getElementById('btn-tn-generate-pre')?.addEventListener('click', tnGenerate);
+    // Results: rebuild prompts button
+    document.getElementById('btn-tn-rebuild')?.addEventListener('click', tnBuildAndGenerate);
     document.getElementById('btn-tn-save-template').addEventListener('click', tnSaveTemplate);
     renderTnTemplateList();
+}
+
+// Syncs the Step-2 generate button label from the main one and enables it
+function tnEnableGeneratePre() {
+    const pre = document.getElementById('btn-tn-generate-pre');
+    const main = document.getElementById('btn-tn-generate');
+    if (!pre) return;
+    pre.disabled = false;
+    pre.classList.remove('btn-secondary');
+    pre.classList.add('btn-primary');
+    if (main) pre.textContent = main.textContent; // mirror label (e.g. ⋯ Generate 2 Variations)
+}
+
+function tnDisableGeneratePre() {
+    const pre = document.getElementById('btn-tn-generate-pre');
+    if (!pre) return;
+    pre.disabled = true;
+    pre.classList.remove('btn-primary');
+    pre.classList.add('btn-secondary');
+    pre.textContent = '⚡ Generate Variations';
 }
 
 /* ─── STEP 1 — Raw Idea Input ─────────────────────────────────────────── */
@@ -244,6 +273,7 @@ function renderPersonPicker() {
 }
 
 function renderTnColorPicker() {
+    // ── Pre-defined preset chips ──────────────────────────────────────
     const el = document.getElementById('tn-color-picker');
     if (!el) return;
     el.innerHTML = TN_COLOR_PRESETS.map(p => `
@@ -252,24 +282,151 @@ function renderTnColorPicker() {
             <span class="tn-color-swatch" style="background:${p.swatches[1]}"></span>
             <span class="tn-color-chip-label">${p.label}</span>
         </button>`).join('');
+
     el.querySelectorAll('[data-preset]').forEach(btn => {
         btn.addEventListener('click', () => {
             el.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('selected'));
+            document.getElementById('tn-saved-brands')?.querySelectorAll('[data-saved-brand]').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
             tnSelectedColorPreset = btn.dataset.preset;
+            tnCustomBrand = null;
+            // Fill the builder inputs with preset colours for reference
+            const preset = TN_COLOR_PRESETS.find(p => p.id === btn.dataset.preset);
+            if (preset) tnSyncColorWells(preset.swatches[0], preset.swatches[1], preset.swatches[2] || '#ffffff');
         });
     });
 
-    // Custom hex
-    const hexInput = document.getElementById('tn-custom-hex');
-    const hexPreview = document.getElementById('tn-hex-preview');
-    if (hexInput) {
-        hexInput.addEventListener('input', () => {
-            tnCustomAccent = hexInput.value;
-            if (hexPreview) hexPreview.style.background = /^#[0-9a-f]{6}$/i.test(tnCustomAccent) ? tnCustomAccent : 'transparent';
+    // ── Saved custom brands ───────────────────────────────────────────
+    tnRenderSavedBrands();
+
+    // ── Brand builder colour wells ────────────────────────────────────
+    const pairs = [
+        { well: 'tn-brand-bg', hex: 'tn-brand-bg-hex' },
+        { well: 'tn-brand-accent', hex: 'tn-brand-accent-hex' },
+        { well: 'tn-brand-text', hex: 'tn-brand-text-hex' }
+    ];
+    pairs.forEach(({ well, hex }) => {
+        const wellEl = document.getElementById(well);
+        const hexEl = document.getElementById(hex);
+        if (!wellEl || !hexEl) return;
+        // colour picker → text field + preview
+        wellEl.addEventListener('input', () => {
+            hexEl.value = wellEl.value;
+            tnUpdateBrandPreview();
+            tnActivateCustomBrand();
         });
-    }
+        // text field → colour picker + preview
+        hexEl.addEventListener('input', () => {
+            if (/^#[0-9a-f]{6}$/i.test(hexEl.value)) {
+                wellEl.value = hexEl.value;
+                tnUpdateBrandPreview();
+                tnActivateCustomBrand();
+            }
+        });
+    });
+
+    tnUpdateBrandPreview();
+
+    // ── Save brand button ─────────────────────────────────────────────
+    document.getElementById('btn-tn-save-brand')?.addEventListener('click', () => {
+        const name = document.getElementById('tn-brand-name')?.value.trim();
+        if (!name) { alert('Enter a brand name first.'); return; }
+        const brand = {
+            id: `brand-${Date.now()}`,
+            name,
+            bg: document.getElementById('tn-brand-bg')?.value || '#0d0d0d',
+            accent: document.getElementById('tn-brand-accent')?.value || '#7c5cfc',
+            text: document.getElementById('tn-brand-text')?.value || '#ffffff'
+        };
+        tnSavedBrands.unshift(brand);
+        localStorage.setItem('tn_brands', JSON.stringify(tnSavedBrands));
+        tnCustomBrand = brand;
+        tnSelectedColorPreset = null;
+        el.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('selected'));
+        tnRenderSavedBrands();
+        document.getElementById('tn-brand-builder')?.removeAttribute('open');
+        document.getElementById('tn-brand-name').value = '';
+    });
 }
+
+function tnRenderSavedBrands() {
+    tnSavedBrands = JSON.parse(localStorage.getItem('tn_brands') || '[]');
+    const row = document.getElementById('tn-saved-brands-row');
+    const container = document.getElementById('tn-saved-brands');
+    if (!container) return;
+    if (tnSavedBrands.length === 0) {
+        row?.classList.add('hidden');
+        return;
+    }
+    row?.classList.remove('hidden');
+    container.innerHTML = tnSavedBrands.map((b, i) => `
+        <div class="tn-color-result-chip tn-saved-brand-chip ${tnCustomBrand?.id === b.id ? 'selected' : ''}" data-saved-brand="${i}">
+            <span class="tn-color-swatch" style="background:${b.bg}"></span>
+            <span class="tn-color-swatch" style="background:${b.accent}"></span>
+            <span class="tn-color-chip-label">${escHtml(b.name)}</span>
+            <span class="tn-brand-del" data-del-brand="${i}" title="Delete">✕</span>
+        </div>`).join('');
+
+    container.querySelectorAll('[data-saved-brand]').forEach(chip => {
+        chip.addEventListener('click', e => {
+            if (e.target.dataset.delBrand !== undefined) return; // handled below
+            const idx = parseInt(chip.dataset.savedBrand);
+            const brand = tnSavedBrands[idx];
+            tnCustomBrand = brand;
+            tnSelectedColorPreset = null;
+            document.getElementById('tn-color-picker')?.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('selected'));
+            container.querySelectorAll('[data-saved-brand]').forEach(b => b.classList.remove('selected'));
+            chip.classList.add('selected');
+            tnSyncColorWells(brand.bg, brand.accent, brand.text);
+        });
+    });
+
+    container.querySelectorAll('[data-del-brand]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.delBrand);
+            if (tnCustomBrand?.id === tnSavedBrands[idx]?.id) tnCustomBrand = null;
+            tnSavedBrands.splice(idx, 1);
+            localStorage.setItem('tn_brands', JSON.stringify(tnSavedBrands));
+            tnRenderSavedBrands();
+        });
+    });
+}
+
+function tnSyncColorWells(bg, accent, text) {
+    const setWell = (id, hexId, val) => {
+        const w = document.getElementById(id);
+        const h = document.getElementById(hexId);
+        if (w) w.value = val;
+        if (h) h.value = val;
+    };
+    setWell('tn-brand-bg', 'tn-brand-bg-hex', bg);
+    setWell('tn-brand-accent', 'tn-brand-accent-hex', accent);
+    setWell('tn-brand-text', 'tn-brand-text-hex', text);
+    tnUpdateBrandPreview();
+}
+
+function tnUpdateBrandPreview() {
+    const bg = document.getElementById('tn-brand-bg')?.value || '#0d0d0d';
+    const accent = document.getElementById('tn-brand-accent')?.value || '#7c5cfc';
+    const text = document.getElementById('tn-brand-text')?.value || '#ffffff';
+    const strip = document.getElementById('tn-brand-preview-strip');
+    const label = document.getElementById('tn-brand-preview-label');
+    if (strip) strip.style.background = `linear-gradient(135deg, ${bg} 60%, ${accent})`;
+    if (label) label.style.color = text;
+}
+
+function tnActivateCustomBrand() {
+    // When user edits colour wells freely (not via a preset), treat as unsaved custom brand
+    const bg = document.getElementById('tn-brand-bg')?.value || '#0d0d0d';
+    const accent = document.getElementById('tn-brand-accent')?.value || '#7c5cfc';
+    const text = document.getElementById('tn-brand-text')?.value || '#ffffff';
+    tnCustomBrand = { id: '_live', name: 'Custom', bg, accent, text };
+    tnSelectedColorPreset = null;
+    document.getElementById('tn-color-picker')?.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('selected'));
+}
+
+
 
 function renderHeadlineFields() {
     const headlineEl = document.getElementById('tn-headline-input');
@@ -311,8 +468,12 @@ async function tnBuildAndGenerate() {
         };
     }
 
+    // Determine colour to send
     const colourPresetName = tnSelectedColorPreset
         ? TN_COLOR_PRESETS.find(p => p.id === tnSelectedColorPreset)?.label
+        : null;
+    const customBrandColors = tnCustomBrand
+        ? { bg: tnCustomBrand.bg, accent: tnCustomBrand.accent, text: tnCustomBrand.text }
         : null;
 
     const payload = {
@@ -323,7 +484,9 @@ async function tnBuildAndGenerate() {
         headlineText: tnHeadline,
         subtextText: tnSubtext,
         colorPreset: colourPresetName,
-        customAccentHex: tnCustomAccent || null,
+        customBrandBg: customBrandColors?.bg || null,
+        customBrandAccent: customBrandColors?.accent || null,
+        customBrandText: customBrandColors?.text || null,
         referenceImageBase64: tnReferenceImageBase64 || null,
         referenceImageMime: tnReferenceImageMime || null
     };
@@ -342,6 +505,7 @@ async function tnBuildAndGenerate() {
         tnSelectedExpression = data.expressionUsed;
 
         statusEl.classList.add('hidden');
+        tnEnableGeneratePre();
         renderTnAnalysisPanel();
     } catch (err) {
         statusEl.textContent = '✗ ' + err.message;
@@ -467,6 +631,7 @@ function renderTnPromptPreviews() {
     document.getElementById('tn-prompt-centered').value = a.prompts.centered || '';
     document.getElementById('tn-prompt-split').value = a.prompts.splitScreen || '';
 
+    // Wire tab switching
     document.querySelectorAll('.tn-prompt-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.tn-prompt-tab').forEach(t => t.classList.remove('active'));
@@ -477,6 +642,30 @@ function renderTnPromptPreviews() {
         });
     });
 
+    // Inject enable/disable toggles into each tab
+    ['offset', 'centered', 'split'].forEach(key => {
+        const tab = document.querySelector(`.tn-prompt-tab[data-layout="${key}"]`);
+        if (!tab || tab.querySelector('.tn-layout-toggle')) return;
+        const toggle = document.createElement('span');
+        toggle.className = 'tn-layout-toggle';
+        toggle.title = 'Click to include/exclude this layout from generation';
+        toggle.textContent = '✓';
+        toggle.addEventListener('click', e => {
+            e.stopPropagation();
+            tnEnabledLayouts[key] = !tnEnabledLayouts[key];
+            const on = tnEnabledLayouts[key];
+            toggle.textContent = on ? '✓' : '✕';
+            tab.classList.toggle('tn-tab-disabled', !on);
+            const textarea = document.getElementById(`tn-prompt-${key}`);
+            if (textarea) textarea.disabled = !on;
+            tnUpdateCreditNote();
+        });
+        tab.appendChild(toggle);
+    });
+
+    tnUpdateCreditNote();
+
+    // Export buttons
     document.querySelectorAll('[data-export-layout]').forEach(btn => {
         btn.addEventListener('click', () => {
             const layout = btn.dataset.exportLayout;
@@ -499,12 +688,35 @@ function renderTnPromptPreviews() {
     });
 }
 
+function tnUpdateCreditNote() {
+    const count = Object.values(tnEnabledLayouts).filter(Boolean).length;
+    const noteEl = document.getElementById('tn-rate-note');
+    if (noteEl) {
+        noteEl.textContent = count === 0
+            ? '⚠ No layouts selected — enable at least one above'
+            : `${count} variation${count > 1 ? 's' : ''} selected — uses ${count} of your 30/hr quota`;
+        noteEl.classList.toggle('tn-rate-note-warn', count === 0);
+    }
+    const btn = document.getElementById('btn-tn-generate');
+    if (btn) {
+        btn.disabled = count === 0;
+        btn.textContent = count === 0
+            ? '⚡ Generate Variations'
+            : `⚡ Generate ${count} Variation${count > 1 ? 's' : ''}`;
+    }
+}
+
+
 /* ─── Generation ──────────────────────────────────────────────────────── */
 
 async function tnGenerate() {
+    const enabled = Object.entries(tnEnabledLayouts).filter(([, v]) => v).map(([k]) => k);
+    const count = enabled.length;
+    if (count === 0) return;
+
     const btn = document.getElementById('btn-tn-generate');
     btn.disabled = true;
-    btn.textContent = '⏳ Generating 3 variants…';
+    btn.textContent = `⏳ Generating ${count} variant${count > 1 ? 's' : ''}…`;
 
     tnGenResults = { offset: null, centered: null, splitScreen: null };
     Object.values(tnPollingIntervals).forEach(clearInterval);
@@ -513,16 +725,27 @@ async function tnGenerate() {
 
     const grid = document.getElementById('tn-gen-grid');
     grid.classList.remove('hidden');
-    ['offset', 'centered', 'split'].forEach(key => {
+
+    const allKeys = ['offset', 'centered', 'split'];
+    allKeys.forEach(key => {
         const slot = document.getElementById(`tn-slot-${key}`);
-        if (slot) slot.innerHTML = `<div class="tn-slot-loading"><div class="tn-slot-spinner"></div><p>${key === 'split' ? 'Split Screen' : key.charAt(0).toUpperCase() + key.slice(1)}</p></div>`;
+        if (!slot) return;
+        if (tnEnabledLayouts[key]) {
+            const label = key === 'split' ? 'Split Screen' : key.charAt(0).toUpperCase() + key.slice(1);
+            slot.innerHTML = `<div class="tn-slot-loading"><div class="tn-slot-spinner"></div><p>${label}</p></div>`;
+            slot.classList.remove('tn-slot-skipped');
+        } else {
+            const label = key === 'split' ? 'Split Screen' : key.charAt(0).toUpperCase() + key.slice(1);
+            slot.innerHTML = `<div class="tn-slot-skip-msg">&#x2715; ${label} skipped</div>`;
+            slot.classList.add('tn-slot-skipped');
+        }
     });
 
     const layouts = [
         { key: 'offset', promptId: 'tn-prompt-offset', slotId: 'tn-slot-offset' },
         { key: 'centered', promptId: 'tn-prompt-centered', slotId: 'tn-slot-centered' },
         { key: 'split', promptId: 'tn-prompt-split', slotId: 'tn-slot-split' }
-    ];
+    ].filter(l => tnEnabledLayouts[l.key]);
 
     for (const layout of layouts) {
         const prompt = document.getElementById(layout.promptId)?.value.trim();
@@ -534,8 +757,10 @@ async function tnGenerate() {
                 body: JSON.stringify({
                     prompt, resolution: '2K', aspectRatio: '16:9', outputFormat: 'png',
                     referenceImageBase64: tnReferenceImageBase64 || null,
-                    referenceImageMime: tnReferenceImageMime || null
+                    referenceImageMime: tnReferenceImageMime || null,
+                    model: localStorage.getItem('kieModel') || 'nano-banana-2'
                 })
+
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
@@ -546,8 +771,9 @@ async function tnGenerate() {
         }
     }
 
-    btn.disabled = false;
-    btn.textContent = '⚡ Regenerate';
+    btn.disabled = count === 0;
+    btn.textContent = count === 0 ? '⚡ Generate' : `⚡ Generate ${count} Variation${count > 1 ? 's' : ''}`;
+    tnUpdateCreditNote();
 }
 
 function tnPollSlot(key, taskId, slotId) {
@@ -783,6 +1009,11 @@ function tnReset() {
     tnSelectedExpression = null;
     tnReferenceImageBase64 = null;
     tnReferenceImageMime = null;
+    tnCustomBrand = null;
+    tnSelectedColorPreset = null;
+    tnDisableGeneratePre();
+    tnEnabledLayouts = { offset: true, centered: true, split: true };
+
     tnGenResults = { offset: null, centered: null, splitScreen: null };
     Object.values(tnPollingIntervals).forEach(clearInterval);
     Object.values(tnPollingTimeouts).forEach(clearTimeout);
