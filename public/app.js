@@ -1,266 +1,202 @@
 /* ─────────────────────────────────────────────
-   Art Styles Data
+   Art Style Data — Theme × Treatment System
+   Pick one Theme + one Treatment; combined description
+   sent as a single style to the image generator.
 ───────────────────────────────────────────── */
-const STYLES = [
-    // ── 3D & Numeric first ──────────────────────────────────────────────────────
+
+const THEMES = [
     {
-        id: "isometric-32bit",
-        name: "3D 32-bit Isometric",
-        color: "#4a90e2",
-        description: "A chunky retro 3D isometric illustration rendered in nostalgic 32-bit video game style. Low-polygon characters and objects with vibrant saturated colors, hard-edged shadows, and bold outlines. Clean isometric grid projection with visible texel patterns, dithered shading, and the unmistakable aesthetic of classic PlayStation-era and early PC 3D games. Bright primary and secondary color palette, pixel-precise detail."
+        id: "isometric",
+        name: "Isometric",
+        color: "#546e7a",
+        description: "Clean isometric projection style. Precise 30-degree isometric grid, geometric forms, and systematic spatial organisation. Structures, objects, and diagrams rendered in isometric perspective with cool blue-grey palette, crisp ruled lines, and clear annotation labels."
     },
     {
-        id: "isometric-miniature",
-        name: "3D Isometric Miniature",
-        color: "#7ecba1",
-        description: "Adorable 3D isometric miniature diorama world style. Tiny detailed scenes rendered with soft ambient occlusion shadows, bright cheerful pastel colors, and a playful tilt-shift scale illusion. Mobile game art aesthetic with rounded organic forms, modular building-block elements, lush tiny greenery, and charming miniature character details. Clean white or light background to emphasise the diorama scale."
-    },
-    {
-        id: "neumorphism-3d",
-        name: "3D Neumorphism",
-        color: "#e0e5ec",
-        description: "Tactile 3D Neumorphism style infographic. Soft extruded shadows, glossy inflated shapes on subtle light grey backgrounds. Modern UI aesthetic with depth illusion, smooth gradients, and clean sans-serif typography. Elevated minimal design."
-    },
-    // ── A ───────────────────────────────────────────────────────────────────────
-    {
-        id: "airbrush",
-        name: "Airbrush",
-        color: "#d81b60",
-        description: "Professional airbrush illustration style infographic. Smooth, gradient-rich surfaces with seamless colour transitions, metallic highlights, and vibrant saturated hues applied with spray technique precision. Reminiscent of classic 1970s–80s commercial airbrush art — dynamic compositions, photorealistic blending on hard-edged forms, dramatic lighting, and a high-gloss finish aesthetic. Rich magenta, cobalt, and chrome palette."
-    },
-    {
-        id: "analytic-drawing",
-        name: "Analytic Drawing",
-        color: "#ede8dc",
-        description: "Precise academic analytic drawing style infographic. Clean technical linework with deliberate cross-hatching for tone and depth, systematic annotation labels, and structured diagrammatic layout. Monochrome or minimal two-tone palette on off-white parchment. Aesthetic drawn from historical scientific illustration, architectural drafting, and anatomical atlases — every line purposefully placed, nothing decorative."
-    },
-    // ── C ───────────────────────────────────────────────────────────────────────
-    {
-        id: "chalkboard",
-        name: "Chalkboard",
-        color: "#2d4a3e",
-        description: "Hand-drawn chalkboard style infographic. Dusty green background with white chalk outlines and hand-lettered text. Authentic educational feel with imperfect strokes, chalk texture, and organic hand-drawn icons. Warm and approachable classroom aesthetic."
-    },
-    {
-        id: "childrens-book",
-        name: "Children's Book Illustration",
-        color: "#ffd740",
-        description: "Whimsical children's book cross-section illustration style. Warm, joyful cutaway views revealing interiors rendered with thick black outlines, flat bright saturated colours, and hand-lettered labels. Playful DK-style illustrated encyclopedia aesthetic adapted for young readers — rounded friendly characters, oversized clear iconography, bold primary palette, and a sense of wonder in every section."
-    },
-    {
-        id: "cinematic-poster",
-        name: "Cinematic Movie Poster",
-        color: "#b71c1c",
-        description: "Dramatic Hollywood cinematic movie poster style infographic. High-contrast dramatic lighting with deep blacks and vivid colour grading, bold typographic hierarchy at heroic scale, and atmospheric depth suggesting epic scale. Rich cinematic colour palette — deep crimson, burnished gold, midnight blue. Professional print-quality composition with powerful visual storytelling and blockbuster energy."
-    },
-    {
-        id: "collage-chaos",
-        name: "Collage Chaos",
-        color: "#ff3d00",
-        description: "Maximalist collage chaos style infographic. Overlapping cutouts, vibrant color clashes, textured scraps like a digital scrapbook. High-energy layered composition with bold typography, mixed media textures, and explosive visual storytelling."
-    },
-    {
-        id: "colouring-book",
-        name: "Colouring Book",
-        color: "#f5f5f5",
-        description: "Intricate adult colouring book style infographic. Bold, clean black outlines on a pure white background with no colour fills — detailed decorative patterns, flowing linework, ornamental borders, and zentangle-inspired geometric detailing within each section. Varied line weights from thick structural outlines to fine interior detail lines. Ready-to-colour aesthetic with beautiful implied structure."
-    },
-    {
-        id: "computer-game",
-        name: "Computer Game Cover",
-        color: "#1565c0",
-        description: "Bold retro computer game box cover art style infographic. Dynamic action-oriented composition with dramatic perspective, metallic embossed typography, vivid gradient backgrounds in deep navy and electric tones, and highly detailed character or environment hero artwork. Classic PC game box art aesthetic from the 1980s–90s era — feature lists annotated in info panels, dramatic lightning effects, and a collector's-edition premium feel."
-    },
-    {
-        id: "corporate-professional",
-        name: "Corporate Professional",
+        id: "flat-design",
+        name: "Flat Design",
         color: "#1a3a5c",
-        description: "Polished professional corporate artwork style infographic. Clean structured layout with a restrained executive colour palette — deep navy, slate grey, crisp white, and a single accent colour such as gold or teal. Sharp geometric section dividers, authoritative sans-serif typography in a clear visual hierarchy, data visualisations rendered as refined charts with subtle drop shadows, and icon-driven callout boxes with clean stroke icons. Premium board-room presentation quality — no clutter, high contrast, confident whitespace, and every element purposefully aligned on a rigorous grid. Sophisticated, trust-inspiring, and instantly credible."
+        description: "Polished flat design aesthetic. Restrained modern palette — deep navy, slate grey, and a single accent colour. Sharp geometric section dividers, authoritative sans-serif typography, clean data visualisations, and confident whitespace. Professional, credible, board-room quality."
     },
-    // ── D ───────────────────────────────────────────────────────────────────────
     {
-        id: "dark-fantasy",
-        name: "Dark Fantasy",
-        color: "#4a0e4e",
-        description: "Atmospheric dark fantasy illustration style infographic. Rich brooding colour palette — deep purples, shadow teal, amber candlelight, and blood crimson highlights against near-black backgrounds. Epic high-fantasy aesthetic with intricate ornate borders, dramatic chiaroscuro lighting, textured vellum-like surface, mystic runes or sigils as decorative elements, and an atmosphere of ancient power and dark wonder."
+        id: "comic-book",
+        name: "Comic Book",
+        color: "#f4511e",
+        description: "Bold dynamic comic book visual style. Expressive linework, dramatic panel compositions, halftone dot textures, vibrant flat colour fills, and kinetic energy. Speed lines, bold black outlines, action-packed narrative momentum in contemporary superhero comics aesthetic."
     },
-    // ── F ───────────────────────────────────────────────────────────────────────
+    {
+        id: "cinematic",
+        name: "Cinematic / Epic",
+        color: "#b71c1c",
+        description: "Dramatic Hollywood cinematic epic style. High-contrast dramatic lighting, deep blacks, vivid colour grading, atmospheric depth, heroic scale composition, and blockbuster visual storytelling. Rich palette of deep crimson, burnished gold, and midnight blue."
+    },
     {
         id: "fantasy",
-        name: "Fantasy",
+        name: "Fantasy / Sci-Fi",
         color: "#7e57c2",
-        description: "Vibrant high fantasy illustration style infographic. Lush richly detailed environments bathed in magical golden-hour lighting, jewel-tone colour palette of sapphire, emerald, and amethyst. Epic compositional scale with detailed character or creature elements, enchanted forest or crystal environments, glowing arcane magical effects, ornate illustrated borders, and the soaring optimism of classic fantasy art."
+        description: "Vibrant high fantasy or science fiction illustration style. Lush richly detailed environments, jewel-tone colours of sapphire, emerald, and amethyst, magical or technological atmospheric effects, ornate illustrated borders, and epic compositional scale."
     },
     {
-        id: "frutiger-aero",
-        name: "Frutiger Aero",
-        color: "#64b5f6",
-        description: "Frutiger Aero revival style infographic. Glossy gradients, bubbly rounded icons, sky-blue utopian vibes. Early 2000s optimistic tech aesthetic with lens flares, transparent glass elements, lush nature motifs, and clean sans-serif typography."
-    },
-    // ── G ───────────────────────────────────────────────────────────────────────
-    {
-        id: "graffiti",
-        name: "Graffiti",
-        color: "#e53935",
-        description: "Bold urban graffiti and street art style infographic. Dynamic wildstyle lettering with thick outlines and vibrant fills, spray-paint texture overlays, layered bubble letters, and authentic urban colour palette — electric red, acid yellow, chrome silver, and deep black on concrete or brick surface texture. Street culture aesthetic with expressive character illustration and raw kinetic energy."
-    },
-    // ── I ───────────────────────────────────────────────────────────────────────
-    {
-        id: "isometric-drawing",
-        name: "Isometric Drawing",
-        color: "#546e7a",
-        description: "Clean technical isometric projection drawing style infographic. Precise 30-degree isometric grid with crisp ruled lines, clean geometric forms, and systematic spatial organisation. Professional architectural or engineering illustration aesthetic — limited palette of cool blue-grey, white, and a single accent colour, clear annotation labels, and a structured diagrammatic layout that makes complex spatial relationships immediately legible."
-    },
-    // ── K ───────────────────────────────────────────────────────────────────────
-    {
-        id: "kawaii-doodle",
-        name: "Kawaii Doodle",
-        color: "#fce4ec",
-        description: "Kawaii Doodle style infographic. Cute playful characters with soft pastels and whimsical elements. Round friendly shapes, big expressive eyes on illustrated characters, bubblegum pink and mint green palette. Charming and approachable Japanese-inspired aesthetic."
-    },
-    // ── L ───────────────────────────────────────────────────────────────────────
-    {
-        id: "lofi-chic",
-        name: "Lofi Chic",
-        color: "#f5e6d3",
-        description: "The artwork is rendered in a modern digital watercolor and soft-vector 'Lofi-Chic' style. It features a hand-painted feel with gentle textures, organic edges, and a warm, inviting atmosphere. The human figures are stylized, elegant, and gender-neutral with flowing, graceful silhouettes. The color palette consists of dreamy pastels: soft peach, lavender, warm turquoise, and champagne gold. The background is a clean, textured paper-white, giving it a high-end editorial journal aesthetic."
-    },
-    // ── M ───────────────────────────────────────────────────────────────────────
-    {
-        id: "medical-journal",
-        name: "Medical Journal Illustration",
-        color: "#e8f5e9",
-        description: "Precise medical journal cross-section illustration style. Highly accurate anatomical cutaway views with clinical labelling, clean white or off-white background, and professional scientific illustration technique consistent with top-tier medical textbooks. Detailed technical linework, selective colour highlighting of key structures using standard anatomical colour conventions, systematic annotation callouts, and the authoritative precision of peer-reviewed publication artwork."
+        id: "retro",
+        name: "Retro / Vintage",
+        color: "#ff6ec7",
+        description: "Nostalgic retro or vintage aesthetic. Warm, time-worn colour palettes, period-accurate typography, aged textures, and the distinctive visual grammar of past eras — from 1950s Americana to 1990s digital nostalgia and Y2K bubblegum."
     },
     {
-        id: "medical-science",
-        name: "Medical Science",
-        color: "#0a1628",
-        description: "A high-end medical-science infographic illustration. Photorealistic 3D medical visualization combined with clean technical line art. High-end 3D medical visualization and photorealistic neuro-imaging. Professional scientific journal aesthetic with fMRI heat-mapping and bioluminescent neural firing. 8k resolution, clinical precision, and sharp macro-photography."
-    },
-    {
-        id: "micro-industrial",
-        name: "Micro Industrial",
-        color: "#212121",
-        description: "Micro-industrial style infographic. Barcode motifs, stark mechanical icons, utilitarian grids with raw edges. Dark industrial aesthetic with technical line weights, monochrome palette with single accent color, engineering diagram precision."
-    },
-    {
-        id: "modern-comic",
-        name: "Modern Comic Book",
-        color: "#f4511e",
-        description: "Contemporary comic book style infographic. Bold dynamic linework with halftone dot pattern textures, vibrant flat colour fills, dramatic panel compositions, and expressive typography. Modern superhero comics aesthetic — action speed lines, bold black outlines, kinetic energy throughout, expressive character poses, and that signature combination of graphic punch and narrative momentum from today's best comic book art."
-    },
-    // ── N ───────────────────────────────────────────────────────────────────────
-    {
-        id: "narrative-vector",
-        name: "Narrative Vector",
-        color: "#b2e0e8",
-        description: "A high-end conceptual Narrative Vector illustration for a psychological infographic. Style: Soft digital painting style, volumetric lighting, high-contrast emotional storytelling, 8k resolution, professional editorial design. The color palette consists of dreamy pastels: soft aqua, light grey, warm turquoise, and sea green. The background is a clean, textured paper-white, giving it a high-end editorial journal aesthetic."
-    },
-    {
-        id: "neon",
-        name: "Neon",
+        id: "neon-synthwave",
+        name: "Neon / Synthwave",
         color: "#e040fb",
-        description: "Vibrant neon sign style infographic. Glowing neon tube lighting effects on a deep near-black background with electric colours radiating into the surrounding darkness — hot magenta, electric cyan, acid yellow, and lime green. Ultra-realistic neon glow with soft light spill, dark atmospheric environment, and the sleek seductive energy of a late-night neon-lit city. Each section label rendered as its own glowing neon tube sign."
+        description: "Neon-drenched synthwave atmosphere. Deep near-black backgrounds, glowing neon tube lighting in electric magenta, cyan, and lime, chromatic grid planes, moody retro-futuristic aesthetic, and the perfectly calibrated nostalgia of a future that never was."
     },
-    // ── O ───────────────────────────────────────────────────────────────────────
     {
-        id: "one-line",
-        name: "One Line Drawing",
+        id: "kawaii",
+        name: "Kawaii / Cute",
+        color: "#fce4ec",
+        description: "Kawaii cute illustration style. Soft pastels, round friendly shapes, big expressive eyes on illustrated characters, bubblegum pink and mint green palette, whimsical playful elements, and warm Japanese-inspired approachability."
+    },
+    {
+        id: "medical-scientific",
+        name: "Medical / Scientific",
+        color: "#e8f5e9",
+        description: "Precise medical or scientific illustration style. Clinical labelling, clean off-white backgrounds, technical linework, anatomical colour conventions, fMRI-style visualisations, systematic annotation callouts, and the authoritative precision of peer-reviewed publication artwork."
+    },
+    {
+        id: "urban-street",
+        name: "Street / Urban",
+        color: "#e53935",
+        description: "Bold urban street art aesthetic. Dynamic wildstyle lettering, spray-paint texture overlays, raw kinetic energy, expressive character illustration, and authentic street culture palette — electric red, acid yellow, chrome silver on concrete or brick surface."
+    },
+    {
+        id: "minimal-line",
+        name: "Minimal / Line",
         color: "#f9f9f9",
-        description: "Elegant continuous one-line drawing style infographic. A single unbroken flowing ink line creates every figure, subject, and structural element without lifting from the page — all complexity expressed through one pure stroke. Minimalist and sophisticated aesthetic on clean white background. The entire infographic content, layout, and labelling is rendered through this single continuous contour, creating a meditative artistic tension between simplicity and detail."
-    },
-    // ── P ───────────────────────────────────────────────────────────────────────
-    {
-        id: "paper-cut",
-        name: "Paper Cut Craft",
-        color: "#ef9a9a",
-        description: "Intricate paper cut craft illustration style infographic. Layered paper construction with subtle drop shadows between layers creating beautiful dimensional depth. Precisely cut organic shapes, clean silhouettes, and elegantly organised stacked layers in richly coloured craft paper tones — terracotta, sage green, dusty rose, and cream. Handcrafted aesthetic with visible paper texture and the tactile warmth of analogue craft."
+        description: "Stripped-back minimal or line illustration style. Clean uncluttered composition, deliberate linework, generous negative space, and a restrained monochrome or two-tone palette. Elegant simplicity — every element earns its place."
     },
     {
-        id: "pastel-drawing",
-        name: "Pastel Drawing",
-        color: "#f8bbd0",
-        description: "Soft traditional pastel drawing style infographic. Chalky blended pastel texture on toned Ingres paper with delicate colour transitions and a dreamy, tactile quality. Visible paper tooth grain, layered colour blending with soft stumped edges, and a romantic atmospheric mood. Warm ivory and blush tones with selective rich pastel highlights — the cultivated softness of a fine-art pastel master's sketchbook."
+        id: "game-cover",
+        name: "Game Cover",
+        color: "#1565c0",
+        description: "Explosively dynamic computer game cover art style. High-octane action composition with extreme dramatic perspective, metallic embossed typography in electric tones, cinematic lens flare and god-ray lighting effects, highly detailed hero character or environment artwork, deep navy-to-electric gradient backgrounds, thunderous atmospheric shadows, and the premium collector\'s-edition energy of iconic AAA game box art. Maximum impact, zero restraint."
+    },
+    {
+        id: "youtube-thumbnail",
+        name: "YouTube Thumbnail",
+        color: "#ff0000",
+        description: "Ultra-clickable 16:9 YouTube thumbnail style illustration (1920×1080). Clean vector-cartoon look with thick smooth outlines, semi-flat cel shading with soft gradients, bright saturated colours, high contrast, crisp edges, strong glow and deep drop shadows, sticker-cutout typography, subtle lens flares and sparkles, polished commercial thumbnail aesthetic readable at small size. Maximum scroll-stopping visual punch."
+    }
+];
+
+const TREATMENTS = [
+    {
+        id: "vector",
+        name: "Vector",
+        color: "#0288d1",
+        description: "Rendered as clean crisp vector illustration — smooth digital linework, flat precise colour fills, and sharp scalable edges with no texture or grain."
+    },
+    {
+        id: "3d-rendered",
+        name: "3D Rendered",
+        color: "#7ecba1",
+        description: "Rendered with full 3D digital CGI — dimensional shapes, volumetric lighting, ambient occlusion shadows, soft depth of field, and photorealistic surface materials."
+    },
+    {
+        id: "hand-drawn",
+        name: "Hand Drawn",
+        color: "#fffde7",
+        description: "Rendered with organic hand-drawn marks — imperfect natural linework, visible pencil or marker strokes, gestural energy, and the warmth of analogue illustration."
+    },
+    {
+        id: "watercolour",
+        name: "Watercolour",
+        color: "#e3f2fd",
+        description: "Rendered in soft watercolour washes — fluid wet-on-wet bleeds, translucent layered colour, paper grain texture, and the dreamy organic edges of painterly illustration."
+    },
+    {
+        id: "ink-linework",
+        name: "Ink / Linework",
+        color: "#f5f0e8",
+        description: "Rendered with expressive ink or fine linework — decisive pen strokes, cross-hatching for tone, Sumi-e brush energy, and the authoritative precision of ink on paper."
     },
     {
         id: "pixel-art",
         name: "Pixel Art",
         color: "#00897b",
-        description: "Classic hand-crafted pixel art style infographic. Precise individual pixels arranged in crisp grid patterns with a clear limited colour palette of 16–32 colours. Retro 8-bit to 16-bit game aesthetic — chunky sprite-like icons, clean pixel typography, dithered shading patterns, and nostalgic digital charm. No anti-aliasing anywhere. Pure pixel precision. Every element reads as intentional, hand-placed pixels in the tradition of classic game sprite art."
+        description: "Rendered in classic pixel art — individual hand-placed pixels in a 16–32 colour palette, chunky sprite-like forms, dithered shading, and crisp retro 8-bit to 16-bit game aesthetic. No anti-aliasing anywhere."
     },
     {
         id: "poly-art",
         name: "Poly Art",
         color: "#1e88e5",
-        description: "Low-polygon geometric poly art style infographic. Triangulated mesh surfaces creating minimalist geometric representations with flat-shaded polygon faces and bold colour variation between adjacent triangles. Clean digital art aesthetic — sharp crystalline fragmentation, dynamic geometric composition, and a modern abstract visual appeal that transforms organic forms into striking angular geometry. Cool blue, teal, and silver palette with accent warm triangles."
-    },
-    // ── R ───────────────────────────────────────────────────────────────────────
-    {
-        id: "retro-y2k",
-        name: "Retro Y2K",
-        color: "#ff6ec7",
-        description: "90s/Y2K video game retro style infographic. Pixel art icons, neon bubblegum colors, chunky rounded typography, vibrant saturated palette with hot pink, electric blue, and lime green. Nostalgic digital aesthetic with scanline textures and retro UI elements."
+        description: "Rendered as low-polygon geometric poly art — triangulated mesh surfaces, flat-shaded polygon faces with bold colour variation between adjacent triangles, and angular crystalline fragmentation."
     },
     {
-        id: "retrowave",
-        name: "RetroWave",
-        color: "#7b1fa2",
-        description: "Neon-drenched RetroWave / Outrun style infographic. Synthwave aesthetic with purple-to-pink gradient horizon skies, glowing chrome perspective-grid ground planes, distant setting sun, and neon outline typography. 1980s retro-futuristic digital aesthetic — silhouetted palms, geometric chrome shapes, star-field backdrops, and that signature nostalgia for a future that never was. Dominant palette of deep violet, neon pink, and electric cyan."
+        id: "paper-cut",
+        name: "Paper Cut",
+        color: "#ef9a9a",
+        description: "Rendered as layered paper cut craft — precisely cut shapes with subtle drop shadows between layers, beautiful dimensional depth, and richly coloured craft paper tones with visible texture."
     },
-    // ── S ───────────────────────────────────────────────────────────────────────
+    {
+        id: "pastel-chalk",
+        name: "Pastel / Chalk",
+        color: "#f8bbd0",
+        description: "Rendered with soft pastel or chalk medium — chalky blended texture on toned paper, visible paper grain, layered colour blending with soft stumped edges, and the cultivated softness of fine-art pastel."
+    },
+    {
+        id: "chalkboard",
+        name: "Chalkboard",
+        color: "#2d4a3e",
+        description: "Rendered on a chalkboard surface — dusty green background with white chalk outline marks, authentic chalk texture with imperfect strokes, and the warm hand-lettered educational classroom aesthetic."
+    },
+    {
+        id: "lego-bricks",
+        name: "Lego Bricks",
+        color: "#ffb300",
+        description: "Rendered in Lego brick construction toy aesthetic — blocky studded brick forms in bright primary toy colours, visible Lego stud grid, modular building-block assembly logic, and the instantly recognisable plastic toy aesthetic."
+    },
+    {
+        id: "miniature",
+        name: "Miniature Diorama",
+        color: "#aed581",
+        description: "Rendered as a tilt-shift miniature diorama — tiny detailed scenes with soft ambient occlusion, bright cheerful pastel colours, the playful scale illusion of objects made to look miniature, and modular building-block elements."
+    },
+    {
+        id: "airbrush",
+        name: "Airbrush",
+        color: "#d81b60",
+        description: "Rendered with professional airbrush technique — seamless gradient colour transitions, metallic highlights, vibrant saturated spray-blended hues, photorealistic blending on hard-edged forms, and high-gloss 1970s–80s commercial airbrush finish."
+    },
+    {
+        id: "cel-shading",
+        name: "Cel Shading",
+        color: "#ff6f00",
+        description: "Rendered with semi-flat cel shading — thick smooth outlines, discrete toon-shaded colour bands with soft gradient transitions, high contrast, crisp edges, strong glow effects, and deep drop shadows in the style of modern animated productions."
+    },
     {
         id: "sketchnote",
         name: "Sketchnote",
         color: "#fffde7",
-        description: "Casual sketchnote style infographic. Messy hand-drawn arrows, circled keywords, casual doodles, and mixed typography on cream paper. Authentic note-taking aesthetic with ink pen strokes, small illustrations, and organic layout flow."
-    },
-    {
-        id: "sumi-e",
-        name: "Sumi-e Ink",
-        color: "#f5f0e8",
-        description: "Sumi-e ink wash style infographic. Black ink nodes on aged paper with red stamp highlights and vertical scroll flow. Traditional Japanese brush painting aesthetic with expressive ink strokes, negative space, and cultural authenticity."
-    },
-    {
-        id: "synthwave",
-        name: "SynthWave",
-        color: "#0d47a1",
-        description: "Atmospheric SynthWave style infographic. Moody deep-space visual palette — rich indigo and midnight blue nebula backgrounds, pulsing laser-grid floors, glowing typography in electric blue and violet, and chrome metallic structural elements with inner glow. Synthwave music album artwork aesthetic with cascading light trails, cosmic star-field atmosphere, and the perfectly calibrated retro-futuristic mood of the 1980s imagined future — melancholic, beautiful, and cinematic."
-    },
-    // ── T ───────────────────────────────────────────────────────────────────────
-    {
-        id: "tattoo",
-        name: "Tattoo",
-        color: "#424242",
-        description: "Traditional tattoo flash art illustration style infographic. Bold black outlines with solid flat colour fills in the classic American traditional tattoo style — clean, strong, and iconic. Alternatively rendered in fine-line black-and-grey tattoo style with delicate stippling and precise linework. Traditional tattoo motifs (banners, roses, eagles, daggers) adapted as visual metaphors for infographic content, arranged with the decorative logic of a flash sheet composition."
-    },
-    // ── V ───────────────────────────────────────────────────────────────────────
-    {
-        id: "vintage-pop-art",
-        name: "Vintage Pop Art",
-        color: "#e91e63",
-        description: "Bold vintage pop art style infographic. Roy Lichtenstein-inspired Ben-Day halftone dot printing effects, vivid flat primary and secondary colour fills — red, yellow, cyan, black — thick bold outlines, and mid-century graphic design sensibility. Punchy visual contrasts, onomatopoeic energy, comic-strip panel composition, and the irreverent graphic confidence of 1960s Pop Art applied to infographic structure."
-    },
-    // ── W ───────────────────────────────────────────────────────────────────────
-    {
-        id: "watercolor",
-        name: "Watercolor",
-        color: "#e3f2fd",
-        description: "Soft watercolor style infographic. Gentle color washes with fluid edges, blended dreamy gradients, and thematic framework presentation. Organic and artistic aesthetic with translucent layered colors, paper texture, and hand-painted feel."
-    },
-    {
-        id: "watercolor-surreal",
-        name: "Watercolor Surreal",
-        color: "#ce93d8",
-        description: "Watercolor surreal style infographic. Blended dreamy washes, absurd floating elements, soft gradients with impossible visual combinations. Dreamlike and imaginative aesthetic with soft color transitions, ethereal atmosphere, and poetic visual metaphors."
-    },
-    {
-        id: "whiteboard",
-        name: "Whiteboard",
-        color: "#f8f8f8",
-        description: "Clean whiteboard sketch style infographic. Thick dry-erase marker strokes on a glossy white surface with colorful highlights in blue, red, and green marker. Hand-drawn arrows, circled keywords, and casual business doodles. Professional brainstorming aesthetic."
+        description: "Rendered in sketchnote visual note-taking style — casual hand-drawn arrows, circled keywords, mixed typography, small illustrative doodles, ink pen strokes on cream paper, and organic layout flow."
     }
 ];
+
+// Compatibility shim: rest of codebase reads getSelectedStyles()[0]
+// We expose a computed array from the Theme + Treatment selection
+let selectedTheme = null;
+let selectedTreatment = null;
+
+function getSelectedStyle() {
+    if (!selectedTheme) return null;
+    const desc = selectedTreatment
+        ? selectedTheme.description + " " + selectedTreatment.description
+        : selectedTheme.description;
+    const name = selectedTreatment
+        ? selectedTheme.name + " — " + selectedTreatment.name
+        : selectedTheme.name;
+    const id = selectedTreatment
+        ? selectedTheme.id + "--" + selectedTreatment.id
+        : selectedTheme.id;
+    return { id, name, color: selectedTheme.color, description: desc };
+}
+
 
 /* ─────────────────────────────────────────────
    Polling Status Messages
@@ -276,11 +212,17 @@ const STATUS_MESSAGES = [
 /* ─────────────────────────────────────────────
    UI State (non-queue)
 ───────────────────────────────────────────── */
-let selectedStyles = [];   // array — supports multi-select
+// selectedStyles is now computed from selectedTheme + selectedTreatment
+// Use getSelectedStyles() everywhere instead of the old array
+function getSelectedStyles() {
+    const s = getSelectedStyle();
+    return s ? [s] : [];
+}
 let selectedResolution = "1K";
 let selectedRatio = "1:1";
 let selectedFormat = "png";
 let selectedDensity = "Concise";
+
 
 /* ─────────────────────────────────────────────
    Density Directives
@@ -611,7 +553,7 @@ function renderHistory() {
                 const card = document.querySelector(`.style-card[data-style-id="${task.style.id}"]`);
                 if (card) {
                     card.classList.add('selected');
-                    selectedStyles = [task.style];
+                    selectedTheme = task.style; selectedTreatment = null;
                 }
             }
             // Load prompt into editor
@@ -768,7 +710,7 @@ const CREDITS = { '1K': 18, '2K': 18, '4K': 24 };
 const COST_PER_CREDIT = 0.09 / 18; // $0.005 per credit
 
 function updateCostEstimate() {
-    const count = selectedStyles.length;
+    const count = getSelectedStyles().length;
     if (count === 0) {
         costEstimateEl.classList.add('hidden');
         return;
@@ -789,7 +731,7 @@ function updateCostEstimate() {
 }
 
 function updateButtonStates() {
-    const count = selectedStyles.length;
+    const count = getSelectedStyles().length;
     const hasPrompt = refinedPrompt && refinedPrompt.value.trim().length > 0;
     const multi = count > 1;
 
@@ -813,31 +755,92 @@ function updateButtonStates() {
 }
 
 /* ─────────────────────────────────────────────
-   Style Card Grid (multi-select toggle)
+   Style Picker (Theme × Treatment chips)
 ───────────────────────────────────────────── */
 function renderStyleCards() {
-    STYLES.forEach(style => {
-        const card = document.createElement('div');
-        card.className = 'style-card';
-        card.dataset.styleId = style.id;
-        card.innerHTML = `<span class="style-card-name">${style.name}</span>`;
-        card.addEventListener('click', () => {
-            const idx = selectedStyles.findIndex(s => s.id === style.id);
-            if (idx === -1) {
-                // Add to selection
-                selectedStyles.push(style);
-                card.classList.add('selected');
+    // ── Theme row ──────────────────────────────────────────────────────────
+    const themeSection = document.createElement('div');
+    themeSection.className = 'style-picker-section';
+    themeSection.innerHTML = '<p class="style-picker-label">🎨 Visual Theme <span class="style-picker-hint">— pick the world / aesthetic</span></p>';
+    const themeRow = document.createElement('div');
+    themeRow.className = 'style-picker-row';
+
+    THEMES.forEach(theme => {
+        const chip = document.createElement('button');
+        chip.className = 'style-chip';
+        chip.dataset.id = theme.id;
+        chip.textContent = theme.name;
+        chip.style.setProperty('--chip-color', theme.color);
+        chip.addEventListener('click', () => {
+            if (selectedTheme?.id === theme.id) {
+                // deselect
+                selectedTheme = null;
+                chip.classList.remove('selected');
             } else {
-                // Remove from selection
-                selectedStyles.splice(idx, 1);
-                card.classList.remove('selected');
+                selectedTheme = theme;
+                themeRow.querySelectorAll('.style-chip').forEach(c => c.classList.remove('selected'));
+                chip.classList.add('selected');
             }
             updateButtonStates();
             updateCostEstimate();
         });
-        styleGrid.appendChild(card);
+        themeRow.appendChild(chip);
     });
+
+    themeSection.appendChild(themeRow);
+    styleGrid.appendChild(themeSection);
+
+    // ── Treatment row ──────────────────────────────────────────────────────
+    const treatSection = document.createElement('div');
+    treatSection.className = 'style-picker-section';
+    treatSection.innerHTML = '<p class="style-picker-label">🖌 Rendering Treatment <span class="style-picker-hint">— how it\'s drawn (optional)</span></p>';
+    const treatRow = document.createElement('div');
+    treatRow.className = 'style-picker-row';
+
+    TREATMENTS.forEach(treatment => {
+        const chip = document.createElement('button');
+        chip.className = 'style-chip';
+        chip.dataset.id = treatment.id;
+        chip.textContent = treatment.name;
+        chip.style.setProperty('--chip-color', treatment.color);
+        chip.addEventListener('click', () => {
+            if (selectedTreatment?.id === treatment.id) {
+                // deselect (treatment is optional)
+                selectedTreatment = null;
+                chip.classList.remove('selected');
+            } else {
+                selectedTreatment = treatment;
+                treatRow.querySelectorAll('.style-chip').forEach(c => c.classList.remove('selected'));
+                chip.classList.add('selected');
+            }
+            updateButtonStates();
+            updateCostEstimate();
+        });
+        treatRow.appendChild(chip);
+    });
+
+    treatSection.appendChild(treatRow);
+    styleGrid.appendChild(treatSection);
+
+    // ── Preview label (updates dynamically) ───────────────────────────────
+    const previewEl = document.createElement('p');
+    previewEl.id = 'style-combo-preview';
+    previewEl.className = 'style-combo-preview hidden';
+    styleGrid.appendChild(previewEl);
+
+    // Watch for changes via MutationObserver on chips
+    function refreshPreview() {
+        const s = getSelectedStyle();
+        if (s) {
+            previewEl.textContent = `✨ Combined style: ${s.name}`;
+            previewEl.classList.remove('hidden');
+        } else {
+            previewEl.classList.add('hidden');
+        }
+    }
+    styleGrid.addEventListener('click', () => setTimeout(refreshPreview, 0));
 }
+
 
 /* ─────────────────────────────────────────────
    Toggle Button Groups
@@ -875,6 +878,16 @@ function initToggleGroups() {
         btn.classList.add('active');
         selectedFormat = btn.dataset.value;
     });
+
+    const iterToggle = document.getElementById('creation-iterations-toggle');
+    if (iterToggle) {
+        iterToggle.addEventListener('click', e => {
+            const btn = e.target.closest('.toggle-btn');
+            if (!btn) return;
+            iterToggle.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    }
 }
 
 /* ─────────────────────────────────────────────
@@ -897,11 +910,11 @@ btnRefine.addEventListener('click', async () => {
         alert('Please describe your infographic topic first.');
         return;
     }
-    if (selectedStyles.length === 0) {
+    if (getSelectedStyles().length === 0) {
         alert('Please select an art style.');
         return;
     }
-    if (selectedStyles.length > 1) {
+    if (getSelectedStyles().length > 1) {
         alert('Refine Prompt works with a single style. Use ⚡ Quick Gen to batch-generate across multiple styles.');
         return;
     }
@@ -912,7 +925,7 @@ btnRefine.addEventListener('click', async () => {
     refineStatus.classList.remove('hidden', 'error');
 
     try {
-        const body = { topic, style: selectedStyles[0].description, density: selectedDensity };
+        const body = { topic, style: getSelectedStyles()[0].description, density: selectedDensity };
         if (creationImageBase64) { body.referenceImageBase64 = creationImageBase64; body.mimeType = creationImageMime; }
         const brandColors = document.getElementById('brand-colors-input')?.value.trim();
         if (brandColors) body.brandColors = brandColors;
@@ -972,8 +985,8 @@ btnExportPrompt.addEventListener('click', () => {
     const timePart = now.toTimeString().slice(0, 5).replace(':', '');
 
     // Build a slug from style name (falls back to 'prompt')
-    const stylePart = selectedStyles.length > 0
-        ? selectedStyles[0].id.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    const stylePart = getSelectedStyles().length > 0
+        ? getSelectedStyles()[0].id.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
         : 'prompt';
 
     // Build a short slug from the topic (first 4 words, max 40 chars)
@@ -989,7 +1002,7 @@ btnExportPrompt.addEventListener('click', () => {
     const filename = `${datePart}_${timePart}_${stylePart}_${topicSlug}.md`;
 
     // Format as a tidy .md file with a title and the prompt body
-    const styleTitle = selectedStyles.length > 0 ? selectedStyles[0].name : 'Infographic';
+    const styleTitle = getSelectedStyles().length > 0 ? getSelectedStyles()[0].name : 'Infographic';
     const topicTitle = topicInput.value.trim() || 'Infographic';
     const mdContent = `# ${styleTitle} — ${topicTitle}\n\n> Generated: ${now.toLocaleString()}\n\n---\n\n${text}\n`;
 
@@ -1030,7 +1043,7 @@ btnGenerate.addEventListener('click', () => {
         alert('Please refine a prompt first.');
         return;
     }
-    if (selectedStyles.length !== 1) {
+    if (getSelectedStyles().length !== 1) {
         alert('Select exactly one style to use Generate Image.');
         return;
     }
@@ -1051,7 +1064,7 @@ btnGenerate.addEventListener('click', () => {
 
     const finalPrompt = applyBrandColors(applyDensity(prompt));
     for (let i = 0; i < iterations; i++) {
-        setTimeout(() => submitTask(finalPrompt, selectedStyles[0]), i * 200);
+        setTimeout(() => submitTask(finalPrompt, getSelectedStyles()[0]), i * 200);
     }
 });
 
@@ -1068,12 +1081,12 @@ btnQuickGen.addEventListener('click', async () => {
         alert('Please describe your infographic topic first.');
         return;
     }
-    if (selectedStyles.length === 0) {
+    if (getSelectedStyles().length === 0) {
         alert('Please select at least one art style.');
         return;
     }
 
-    const count = selectedStyles.length;
+    const count = getSelectedStyles().length;
     const stylePlural = count === 1 ? 'style' : 'styles';
 
     // Lock buttons
@@ -1086,7 +1099,7 @@ btnQuickGen.addEventListener('click', async () => {
     try {
         // Fire all refine calls in parallel — one per selected style
         const results = await Promise.allSettled(
-            selectedStyles.map(style =>
+            getSelectedStyles().map(style =>
                 fetch('/refine-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1139,7 +1152,7 @@ btnQuickGen.addEventListener('click', async () => {
 ───────────────────────────────────────────── */
 btnDirectPrompt.addEventListener('click', () => {
     const topic = topicInput.value.trim();
-    if (selectedStyles.length === 0) {
+    if (getSelectedStyles().length === 0) {
         alert('Please select at least one art style before using Direct Prompt.');
         return;
     }
@@ -1358,6 +1371,62 @@ function initTabs() {
         });
     });
 
+    // ── Brand screenshot upload zone ─────────────────────────────────
+    const brandUploadZone = document.getElementById('brand-upload-zone');
+    const brandImageInput = document.getElementById('brand-image-input');
+    const brandUploadPlaceholder = document.getElementById('brand-upload-placeholder');
+    const brandUploadPreview = document.getElementById('brand-upload-preview');
+    const brandPreviewImg = document.getElementById('brand-preview-img');
+    const brandPreviewName = document.getElementById('brand-preview-name');
+    const brandClearBtn = document.getElementById('brand-clear-btn');
+
+    let brandImageBase64 = null;
+    let brandImageMime = null;
+
+    function showBrandPreview(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        if (file.size > 5 * 1024 * 1024) {
+            setStatus('Brand image too large — max 5 MB', true);
+            return;
+        }
+        brandImageMime = file.type;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            brandImageBase64 = e.target.result.split(',')[1];
+            brandPreviewImg.src = e.target.result;
+            brandPreviewName.textContent = file.name;
+            brandUploadPlaceholder.classList.add('hidden');
+            brandUploadPreview.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearBrandImage() {
+        brandImageBase64 = null;
+        brandImageMime = null;
+        brandImageInput.value = '';
+        brandPreviewImg.src = '';
+        brandPreviewName.textContent = '';
+        brandUploadPreview.classList.add('hidden');
+        brandUploadPlaceholder.classList.remove('hidden');
+    }
+
+    if (brandUploadZone) {
+        brandUploadZone.addEventListener('click', (e) => {
+            if (!e.target.closest('.brand-clear-btn')) brandImageInput.click();
+        });
+        brandImageInput?.addEventListener('change', () => showBrandPreview(brandImageInput.files[0]));
+        brandClearBtn?.addEventListener('click', (e) => { e.stopPropagation(); clearBrandImage(); });
+
+        brandUploadZone.addEventListener('dragover', (e) => { e.preventDefault(); brandUploadZone.classList.add('drag-over'); });
+        brandUploadZone.addEventListener('dragleave', () => brandUploadZone.classList.remove('drag-over'));
+        brandUploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            brandUploadZone.classList.remove('drag-over');
+            showBrandPreview(e.dataTransfer.files[0]);
+        });
+    }
+
     // Visual type → badge colour (CSS variable-friendly palette)
     const TYPE_META = {
         process_steps: { bg: '#4c1d95', color: '#c4b5fd', icon: '🔢' },
@@ -1379,7 +1448,7 @@ function initTabs() {
     // Intelligence summary panel — injected before the cards grid
     let intelligencePanel = null;
 
-    function renderIntelligence(ci) {
+    function renderIntelligence(ci, brandColors = null) {
         // Remove previous panel if re-running
         if (intelligencePanel) intelligencePanel.remove();
 
@@ -1390,6 +1459,17 @@ function initTabs() {
             </div>`).join('');
 
         const listHtml = (arr, cls) => (arr || []).map(i => `<li class="${cls}">${escapeHtml(i)}</li>`).join('');
+
+        // Brand colour swatches row
+        const swatchHtml = brandColors ? `
+            <div class="ci-brand-palette">
+                <span class="ci-palette-label">🎨 Brand Palette</span>
+                ${['primary', 'secondary', 'accent', 'background', 'text'].map(k =>
+            `<span class="ci-swatch" style="background:${escapeHtml(brandColors[k])}" title="${k}: ${escapeHtml(brandColors[k])}"></span>
+                     <span class="ci-swatch-hex">${escapeHtml(brandColors[k])}</span>`
+        ).join('')}
+                <span class="ci-palette-desc">${escapeHtml(brandColors.description || '')}</span>
+            </div>` : '';
 
         intelligencePanel = document.createElement('div');
         intelligencePanel.className = 'ci-panel';
@@ -1402,13 +1482,13 @@ function initTabs() {
                 ${ci.brand_name ? `<span class="ci-identity-tag">🏷 Brand: <strong>${escapeHtml(ci.brand_name)}</strong></span>` : ''}
                 ${ci.offer_name ? `<span class="ci-identity-tag">📦 Offer: <strong>${escapeHtml(ci.offer_name)}</strong></span>` : ''}
             </div>` : ''}
+            ${swatchHtml}
             <p class="ci-core-message">"${escapeHtml(ci.core_message || '')}"</p>
             <div class="ci-grid">
                 ${fwHtml ? `<div class="ci-col"><h4 class="ci-col-label">Frameworks</h4>${fwHtml}</div>` : ''}
                 ${(ci.key_messages || []).length ? `<div class="ci-col"><h4 class="ci-col-label">Key Messages</h4><ul class="ci-list">${listHtml(ci.key_messages, 'ci-msg')}</ul></div>` : ''}
                 ${(ci.standout_insights || []).length ? `<div class="ci-col"><h4 class="ci-col-label">Standout Insights</h4><ul class="ci-list">${listHtml(ci.standout_insights, 'ci-insight')}</ul></div>` : ''}
             </div>`;
-
 
         // Insert before the cards grid inside resultsEl
         resultsEl.insertBefore(intelligencePanel, cardsGrid);
@@ -1887,19 +1967,24 @@ function initTabs() {
         btnAnalyse.textContent = 'Analysing…';
         btnAnalyse.disabled = true;
         resultsEl.classList.add('hidden');
-        setStatus('Auditing your content for visual opportunities…');
+        setStatus(brandImageBase64 ? 'Extracting brand colours and auditing content…' : 'Auditing your content for visual opportunities…');
 
         try {
+            const body = { websiteCopy: copy, visualStyle: selectedVStyle };
+            if (brandImageBase64 && brandImageMime) {
+                body.brandImageBase64 = brandImageBase64;
+                body.brandImageMime = brandImageMime;
+            }
             const res = await fetch('/analyse-content', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ websiteCopy: copy, visualStyle: selectedVStyle })
+                body: JSON.stringify(body)
             });
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Failed to analyse content');
 
             setStatus('');
-            if (data.contentIntelligence) renderIntelligence(data.contentIntelligence);
+            if (data.contentIntelligence) renderIntelligence(data.contentIntelligence, data.brandColors || null);
             renderCards(data.recommendations || [], data.contentIntelligence || {});
 
             resultsEl.classList.remove('hidden');
@@ -2472,18 +2557,17 @@ function setupImageModal() {
    Initialise
 ───────────────────────────────────────────── */
 function init() {
-    renderStyleCards();
-    initToggleGroups();
-    initTabs();
-    setupAutoExpand(topicInput);
-    setupAutoExpand(refinedPrompt);
-    setupBrandColors();
-    setupCreationReferenceImage();
-    setupReverseEngineer();
-    setupMockups();
-    setupImageModal();
-    updateButtonStates();
-    // Thumbnails tab (thumbnail-tab.js loaded after app.js)
+    initTabs();   // Always first — tab switching must work regardless of other setup
+    try { renderStyleCards(); } catch (e) { console.error('[init] renderStyleCards:', e); }
+    try { initToggleGroups(); } catch (e) { console.error('[init] initToggleGroups:', e); }
+    try { setupAutoExpand(topicInput); } catch (e) { console.error('[init] autoExpand topic:', e); }
+    try { setupAutoExpand(refinedPrompt); } catch (e) { console.error('[init] autoExpand prompt:', e); }
+    try { setupBrandColors(); } catch (e) { console.error('[init] setupBrandColors:', e); }
+    try { setupCreationReferenceImage(); } catch (e) { console.error('[init] setupRefImage:', e); }
+    try { setupReverseEngineer(); } catch (e) { console.error('[init] setupRE:', e); }
+    try { setupMockups(); } catch (e) { console.error('[init] setupMockups:', e); }
+    try { setupImageModal(); } catch (e) { console.error('[init] setupImageModal:', e); }
+    try { updateButtonStates(); } catch (e) { console.error('[init] updateButtonStates:', e); }
     if (typeof initThumbnailsTab === 'function') initThumbnailsTab();
 }
 

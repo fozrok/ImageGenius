@@ -96,12 +96,13 @@ app.get('/api/config', (req, res) => {
 // POST /analyse-content — Visual Strategy: analyse raw website copy → recommend visuals
 
 app.post('/analyse-content', refineLimiter, async (req, res) => {
-  const { websiteCopy, visualStyle } = req.body;
+  const { websiteCopy, visualStyle, brandImageBase64, brandImageMime } = req.body;
   if (!websiteCopy || websiteCopy.trim().length < 80) {
     return res.status(400).json({ error: 'Please paste at least a few sentences of website copy.' });
   }
 
   const model = process.env.VISUAL_STRATEGY_MODEL || 'google/gemini-3-flash-preview';
+  const visionModel = process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.0-flash-001';
 
   const rawCopy = websiteCopy.trim();
 
@@ -154,14 +155,73 @@ app.post('/analyse-content', refineLimiter, async (req, res) => {
     }
   }
 
+  // ── STEP 0: Brand Colour Extraction (vision, runs in parallel with Step 1) ─
+  async function extractBrandColors(imageBase64, imageMime) {
+    const colorSystemPrompt = `You are a professional brand colour analyst.
+Analyse the uploaded image (a website screenshot or brand asset) and extract the dominant brand colour palette.
+Return ONLY a valid JSON object with these exact keys — no prose, no markdown:
+{
+  "primary":     "#hexcode",
+  "secondary":   "#hexcode",
+  "accent":      "#hexcode",
+  "background":  "#hexcode",
+  "text":        "#hexcode",
+  "description": "One sentence describing the palette mood and character in plain English"
+}
+Rules:
+- All hex codes must be 6-digit lowercase #rrggbb format
+- primary = the most dominant brand colour
+- secondary = the second strongest brand colour
+- accent = highlight or call-to-action colour
+- background = the page/canvas background colour
+- text = the main body text colour
+- If a colour cannot be clearly determined, use the closest reasonable approximation`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: visionModel,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${imageMime};base64,${imageBase64}` } },
+              { type: 'text', text: colorSystemPrompt }
+            ]
+          }],
+          max_tokens: 300
+        })
+      });
+      clearTimeout(timeout);
+      if (!r.ok) throw new Error(`Vision API error: ${r.status}`);
+      const d = await r.json();
+      const raw = d.choices?.[0]?.message?.content?.trim();
+      if (!raw) throw new Error('Empty vision response');
+      return parseJSON(raw, 'object');
+    } catch (err) {
+      clearTimeout(timeout);
+      console.warn('[analyse-content] Step 0 colour extraction failed (non-fatal):', err.message);
+      return null; // graceful degradation
+    }
+  }
 
   try {
-    // ── STEP 1: Content Intelligence Extraction ─────────────────────────────
+    // ── STEP 0 + STEP 1: Run colour extraction and content intelligence in parallel ──
     console.log('[analyse-content] Step 1: extracting content intelligence…');
 
     const step1System = CONTENT_INTELLIGENCE_PROMPT;
 
-    const step1Raw = await callLLM(step1System, `RAW CONTENT:\n${rawCopy}`, 1500);
+    const [step1Raw, brandColors] = await Promise.all([
+      callLLM(step1System, `RAW CONTENT:\n${rawCopy}`, 1500),
+      brandImageBase64 && brandImageMime
+        ? extractBrandColors(brandImageBase64, brandImageMime)
+        : Promise.resolve(null)
+    ]);
+
     let contentIntelligence;
     try {
       contentIntelligence = parseJSON(step1Raw, 'object');
@@ -170,17 +230,28 @@ app.post('/analyse-content', refineLimiter, async (req, res) => {
       return res.status(500).json({ error: 'Step 1 (content intelligence) returned invalid JSON', raw: step1Raw });
     }
     console.log('[analyse-content] Step 1 complete. core_message:', contentIntelligence.core_message);
+    if (brandColors) console.log('[analyse-content] Step 0 complete. Brand palette:', brandColors.description);
 
     // ── STEP 2: Visual Recommendation Generation ────────────────────────────
     console.log('[analyse-content] Step 2: generating visual recommendations…');
 
     const step2System = buildVisualStrategistPrompt(visualStyle || 'infographic');
 
+    // Build brand colour block to inject into Step 2 prompt if colours were extracted
+    const brandColorBlock = brandColors ? `
+
+BRAND COLOURS (extracted from uploaded screenshot — use these exact hex codes in every Colour Palette section):
+Primary: ${brandColors.primary}  |  Secondary: ${brandColors.secondary}  |  Accent: ${brandColors.accent}
+Background: ${brandColors.background}  |  Text: ${brandColors.text}
+Palette description: ${brandColors.description}
+
+Every infographicPrompt's Colour Palette section MUST use these exact hex codes.` : '';
+
     const step2User = `CONTENT INTELLIGENCE REPORT:
 ${JSON.stringify(contentIntelligence, null, 2)}
 
 ORIGINAL RAW COPY:
-${rawCopy}`;
+${rawCopy}${brandColorBlock}`;
 
     const step2Raw = await callLLM(step2System, step2User, 4000);
     let recommendations;
@@ -196,7 +267,7 @@ ${rawCopy}`;
     }
 
     console.log(`[analyse-content] Done. ${recommendations.length} recommendations generated.`);
-    res.json({ contentIntelligence, recommendations });
+    res.json({ contentIntelligence, brandColors, recommendations });
 
   } catch (err) {
     console.error('Error in /analyse-content:', err);
@@ -205,7 +276,9 @@ ${rawCopy}`;
 });
 
 
+
 // POST /refine-prompt - OpenRouter API call
+
 
 app.post('/refine-prompt', refineLimiter, async (req, res) => {
   const { topic, style, density, referenceImageBase64, mimeType, brandColors } = req.body;

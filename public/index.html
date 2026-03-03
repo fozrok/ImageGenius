@@ -76,10 +76,28 @@
           placeholder="e.g. 'I am a trauma-informed life coach helping women over 40 rebuild their identity after loss. My RISE Method takes clients through four stages: Recover, Identify, Strengthen, Evolve. Most of my clients arrive feeling invisible and exhausted...'"
           rows="10"></textarea>
         <div class="strategy-actions-row">
+          <!-- Brand image upload (optional) -->
+          <div class="brand-upload-zone" id="brand-upload-zone"
+            title="Upload a brand screenshot to extract brand colours (optional)">
+            <input type="file" id="brand-image-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
+            <div class="brand-upload-placeholder" id="brand-upload-placeholder">
+              <span class="brand-upload-icon">🎨</span>
+              <span class="brand-upload-text">Upload brand screenshot <em>(optional)</em></span>
+              <span class="brand-upload-hint">JPG / PNG · max 5 MB · used to extract brand colours</span>
+            </div>
+            <div class="brand-upload-preview hidden" id="brand-upload-preview">
+              <img id="brand-preview-img" src="" alt="Brand preview" class="brand-preview-thumb" />
+              <div class="brand-preview-info">
+                <span id="brand-preview-name" class="brand-preview-filename"></span>
+                <button class="brand-clear-btn" id="brand-clear-btn" title="Remove image">✕ Remove</button>
+              </div>
+            </div>
+          </div>
           <button id="btn-analyse-content" class="btn-primary">🧠 Analyse My Content</button>
           <span class="llm-badge" id="strategy-llm-badge" title="LLM used for content analysis">⚡ Loading…</span>
         </div>
         <div id="strategy-status" class="status-message hidden"></div>
+
       </section>
 
 
@@ -126,6 +144,8 @@
       <!-- Section 2: Art Style Selector -->
       <section id="section-styles">
         <h2>Select Art Style</h2>
+        <p class="section-subtitle">Choose a <strong>Visual Theme</strong> and optionally a <strong>Rendering
+            Treatment</strong> — they combine into a new style.</p>
         <div id="style-grid" class="style-grid">
           <!-- Cards injected by app.js from STYLES array -->
         </div>
